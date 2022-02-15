@@ -6,7 +6,15 @@ require "simpleParser.rkt"
   (lambda (expr state)))
 
 (define M_value
-  (lambda (expr state)))
+  (lambda (expr state)
+    (cond
+      ((null? expr) 0)
+      ((number? expr) expr)
+      ((eq? (car expr) '%) )
+      ((eq? (car expr) '*) )
+      ((eq? (car expr) '/) )
+      ((eq? (car expr) '+) )
+      ((eq? (car expr) '-) )
 
 (define M_boolean
   (lambda (expr state)))
