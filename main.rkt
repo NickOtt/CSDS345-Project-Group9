@@ -15,6 +15,7 @@ require "simpleParser.rkt"
       ((eq? (car expr) '/) )
       ((eq? (car expr) '+) )
       ((eq? (car expr) '-) )
+      (else error "Invalid value expression"))))
 
 (define M_boolean
   (lambda (expr state)))
