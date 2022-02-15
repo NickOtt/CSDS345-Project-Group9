@@ -1,0 +1,12 @@
+#lang racket
+
+require "simpleParser.rkt"
+
+(define M_state
+  (lambda (state expr)))
+
+(define M_value
+  (lambda (expr)))
+
+(define M_boolean
+  (lambda (expr)))
