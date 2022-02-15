@@ -3,10 +3,10 @@
 require "simpleParser.rkt"
 
 (define M_state
-  (lambda (state expr)))
+  (lambda (expr state)))
 
 (define M_value
-  (lambda (expr)))
+  (lambda (expr state)))
 
 (define M_boolean
-  (lambda (expr)))
+  (lambda (expr state)))
