@@ -9,8 +9,8 @@
 (define leftop cadr)
 (define rightop caddr)
 
-(define M_state
-  (lambda (expr state)))
+;(define M_state
+ ; (lambda (expr state)))
 
 (define M_value
   (lambda (expr state)
@@ -26,4 +26,16 @@
       (error "Invalid value expression")))
 
 (define M_boolean
-  (lambda (expr state)))
+  (lambda (expr state)
+    (cond
+      ((boolean? expr) expr)
+      ((eq? (operator expr) '!) (not (M_value (leftop) state)))
+      ((eq? (operator expr) '==) (= (M_value (leftop) state) (M_value (rightop) state)))
+      ((eq? (operator expr) '!=) (not (= (M_value (leftop) state) (M_value (rightop) state))))
+      ((eq? (operator expr) '<) (< (M_value (leftop) state) (M_value (rightop) state)))
+      ((eq? (operator expr) '>) (> (M_value (leftop) state) (M_value (rightop) state)))
+      ((eq? (operator expr) '<=) (<= (M_value (leftop) state) (M_value (rightop) state)))
+      ((eq? (operator expr) '>=) (>= (M_value (leftop) state) (M_value (rightop) state)))
+      ((eq? (operator expr) '&&) (and (M_boolean (leftop) state) (M_boolean (rightop) state)))
+      ((eq? (operator expr) '||) (or (M_boolean (leftop) state) (M_boolean (rightop) state)))
+      (else (error "Not a boolean")))))
