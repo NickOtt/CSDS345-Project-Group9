@@ -115,7 +115,7 @@
     (cond
       ((boolean? expr) expr)
       ((eq? (operator expr) '!) (not (M_value (leftop expr) state)))
-      ((eq? (operator expr) '==) (= (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '==) (eq? (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '!=) (not (= (M_value (leftop expr) state) (M_value (rightop expr) state))))
       ((eq? (operator expr) '<) (< (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '>) (> (M_value (leftop expr) state) (M_value (rightop expr) state)))
