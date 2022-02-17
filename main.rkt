@@ -20,16 +20,43 @@
       ((eq? (operator expr) 'return) #t)
       (else #f))))
 
+(define booleanVal?
+  (lambda (expr)
+    (cond
+      ((or (eq? expr 'true) (eq? expr 'false)) #t)
+      (else #f))))
+
+(define booleanVal
+  (lambda (bool)
+    (cond
+      ((eq? bool 'true) #t)
+      ((eq? bool 'false) #f)
+      (else (error "Invalid boolean")))))
+
+(define booleanOp?
+  (lambda (op)
+    (cond
+      ((eq? op '!) #t)
+      ((eq? op '==) #t)
+      ((eq? op '!=) #t)
+      ((eq? op '<) #t)
+      ((eq? op '>) #t)
+      ((eq? op '<=) #t)
+      ((eq? op '>=) #t)
+      ((eq? op '&&) #t)
+      ((eq? op '||) #t)
+      (else #f))))
+
 (define interpret
   (lambda (filename)
-    (interpret-helper (parse filename) '(() ()))))
+    (interpret-helper (parser filename) '(() ()))))
 
 (define interpret-helper
   (lambda (parsetree state)
     (cond
-      ((null? parsetree) '())
       ((eq? (caar parsetree) 'return) (M_state (car parsetree) state))
       ((state? (caar parsetree)) (interpret-helper ((cdr parsetree) (M_state (car parsetree) state))))
+      (else (error "Invalid parse tree")))))
 
 ; (define state '((bob steve buh brunch) (1 2 3 4)))
 
@@ -41,7 +68,7 @@
       ((eq? (operator expr) 'if) (if (M_boolean (leftop expr) state) (M_state (rightop expr) state) (M_state (rightop expr) state)))
       ((eq? (operator expr) 'while) (if (M_boolean (leftop expr) state) (M_state expr (M_state (rightop expr) state)) (M_state (rightrightop expr) state)))
       ((eq? (operator expr) 'return) (M_value (leftop expr) state))
-      (else (error "Bad error")
+      (else (error "Invalid state expression")
     ))))
 
 (define getUpdatedValues
@@ -56,13 +83,15 @@
     (cond
       ((null? expr) 0)
       ((number? expr) expr)
+      ((booleanVal? expr) (booleanVal expr))
       ;((contains? expr state) (getFromState ) ;check if variable is contained in the state and substitute with its value
-      ((not (list? expr)) (getFromState expr state)) 
+      ((not (list? expr)) (getFromState expr state))
       ((eq? (operator expr) '+) (+ (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '-) (- (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '*) (* (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '/) (/ (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '%) (remainder (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((booleanOp? (operator expr)) (M_boolean expr state))
       (else error "Invalid value expression"))))
 
 (define firstvar
