@@ -8,11 +8,32 @@
 
 (define leftop cadr)
 (define rightop caddr)
+(define rightrightop cadddr)
+
+(define operator?
+  (lambda (expr)
+    (
+     )))
 
 ; (define state '((bob steve buh brunch) (1 2 3 4)))
 
-;'(define M_state
-;  (lambda (expr state)))
+(define M_state
+  (lambda (expr state)
+    (cond
+      ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (leftop expr) (M_value (rightop expr) state) state)))
+      ((eq? (operator expr) 'var) (list (append (car state) (cons (leftop expr) '())) (append (car (cdr state)) (cons 'z '()))))
+      ((eq? (operator expr) 'if) (if (M_boolean (leftop expr) state) (M_state (rightop expr) state) (M_state (rightop expr) state)))
+      ((eq? (operator expr) 'while) (if (M_boolean (leftop expr) state) (M_state expr (M_state (rightop expr) state)) (M_state (rightrightop expr) state)))
+      ((eq? (operator expr) 'return) (M_value (leftop expr) state))
+      (else (error "Bad error")
+    ))))
+
+(define getUpdatedValues
+  (lambda (var value state)
+    (cond
+      ((eq? var (firstvar state)) (cons value (cdadr state)))
+      ((not (list? (car state))) (error "Value not initialized"))
+      (else (cons (caadr state) (getUpdatedValues var value (list (cdar state) (cdadr state))))))))
 
 (define M_value
   (lambda (expr state)
@@ -26,7 +47,7 @@
       ((eq? (operator expr) '*) (* (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '/) (/ (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '%) (remainder (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      (error "Invalid value expression"))))
+      (else error "Invalid value expression"))))
 
 (define firstvar
   (lambda (state)
@@ -47,5 +68,14 @@
 (define M_boolean
   (lambda (expr state)
     (cond
-      ((null? expr) 
-    ))))
+      ((boolean? expr) expr)
+      ((eq? (operator expr) '!) (not (M_value (leftop expr) state)))
+      ((eq? (operator expr) '==) (= (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '!=) (not (= (M_value (leftop expr) state) (M_value (rightop expr) state))))
+      ((eq? (operator expr) '<) (< (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '>) (> (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '<=) (<= (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '>=) (>= (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '&&) (and (M_boolean (leftop expr) state) (M_boolean (rightop expr) state)))
+      ((eq? (operator expr) '||) (or (M_boolean (leftop expr) state) (M_boolean (rightop expr) state)))
+      (else (error "Not a boolean")))))
