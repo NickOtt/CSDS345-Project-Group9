@@ -10,10 +10,26 @@
 (define rightop caddr)
 (define rightrightop cadddr)
 
-(define operator?
+(define state?
   (lambda (expr)
-    (
-     )))
+    (cond
+      ((eq? (operator expr) '=) #t)
+      ((eq? (operator expr) 'var) #t)
+      ((eq? (operator expr) 'if) #t)
+      ((eq? (operator expr) 'while) #t)
+      ((eq? (operator expr) 'return) #t)
+      (else #f))))
+
+(define interpret
+  (lambda (filename)
+    (interpret-helper (parse filename) '(() ()))))
+
+(define interpret-helper
+  (lambda (parsetree state)
+    (cond
+      ((null? parsetree) '())
+      ((eq? (caar parsetree) 'return) (M_state (car parsetree) state))
+      ((state? (caar parsetree)) (interpret-helper ((cdr parsetree) (M_state (car parsetree) state))))
 
 ; (define state '((bob steve buh brunch) (1 2 3 4)))
 
