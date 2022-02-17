@@ -54,7 +54,7 @@
 (define interpret-helper
   (lambda (parsetree state)
     (cond
-      ((eq? (caar parsetree) 'return) (M_state (car parsetree) state))
+      ((not (list? state)) state)
       ((state? (caar parsetree)) (interpret-helper ((cdr parsetree) (M_state (car parsetree) state))))
       (else (error "Invalid parse tree")))))
 
