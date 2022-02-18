@@ -10,14 +10,14 @@
   (lambda (expr)
     (car expr)))
 
-; gets the left operand of the expression
-(define leftop cadr)
+; gets the second expression
+(define secondExpr cadr)
 
-; gets the right operand of the expression
-(define rightop caddr)
+; gets the third expression
+(define thirdExpr caddr)
 
-; gets the second right operand of the expression
-(define rightrightop cadddr)
+; gets the fourth expression
+(define fourthExpr cadddr)
 
 ; returns the first variable in the state
 (define firstvar
@@ -35,11 +35,11 @@
 ; all value of the value list except the first
 (define cdrVals cdadr)
 
-; the third expression in a list
-(define thirdExpr cddr)
+; everything after the second expression in a list
+(define afterSecondExpr cddr)
 
-; the forth expression of a list
-(define forthExpr cdddr)
+; everything after the third expression of a list
+(define afterFourthExpr cdddr)
 
 ;Helper Functions
 ; functions that are used to assist other methods
@@ -95,25 +95,24 @@
 ; Assigns a variable its value. This defaults to 'z if there is no value assigned
 (define vardefine
   (lambda (expr state)
-    (if (null? (thirdExpr expr))
+    (if (null? (afterSecondExpr expr))
         'z
-        (M_value (rightop expr) state))))
+        (M_value (thirdExpr expr) state))))
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
   (lambda (expr state)
     (cond
-      ((M_boolean (leftop expr) state) (M_state (rightop expr) state))
-      (else (if (null? (forthExpr expr))
-                state
-                (M_state (rightrightop expr) state))))))
+      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state))
+      ((null? (afterFourthExpr expr)) state)
+      (else (M_state (fourthExpr expr) state)))))
 
 ; Handles if the minus operator has one or two operands
 (define minushandler
   (lambda (expr state)
-    (if (null? (thirdExpr expr))
-        (* -1 (M_value (leftop expr) state))
-        (- (M_value (leftop expr) state) (M_value (rightop expr) state)))))
+    (if (null? (afterSecondExpr expr))
+        (* -1 (M_value (secondExpr expr) state))
+        (- (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))))
 
 ; Handles converting a value to its proper return type if needed
 (define valueReturnHandler
@@ -161,13 +160,13 @@
 (define M_state
   (lambda (expr state)
     (cond
-      ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (leftop expr) (M_value (rightop expr) state) state)))
-      ((eq? (operator expr) 'var) (list (append (car state) (cons (leftop expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
+      ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state)))
+      ((eq? (operator expr) 'var) (list (append (car state) (cons (secondExpr expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
       ((eq? (operator expr) 'if) (ifstatementhandler expr state))
-      ((eq? (operator expr) 'while) (if (M_boolean (leftop expr) state)
-                                        (M_state expr (M_state (rightop expr) state))
+      ((eq? (operator expr) 'while) (if (M_boolean (secondExpr expr) state)
+                                        (M_state expr (M_state (thirdExpr expr) state))
                                         state))
-      ((eq? (operator expr) 'return) (valueReturnHandler (M_value (leftop expr) state)))
+      ((eq? (operator expr) 'return) (valueReturnHandler (M_value (secondExpr expr) state)))
       (else (error "Invalid state expression")
     ))))
 
@@ -179,11 +178,11 @@
       ((number? expr) expr)
       ((booleanVal? expr) (booleanVal expr))
       ((not (list? expr)) (getFromState expr state)) ;if the expression is a variable
-      ((eq? (operator expr) '+) (+ (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '+) (+ (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((eq? (operator expr) '-) (minushandler expr state))
-      ((eq? (operator expr) '*) (* (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '/) (quotient (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '%) (remainder (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '*) (* (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '/) (quotient (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '%) (remainder (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((booleanOp? (operator expr)) (M_boolean expr state))
       (else (error "Invalid value expression")))))
 
@@ -194,13 +193,13 @@
       ((boolean? expr) expr)
       ((booleanVal? expr) (booleanVal expr))
       ((not (list? expr)) (getFromState expr state)) ;if the expression is a variable
-      ((eq? (operator expr) '!) (not (M_value (leftop expr) state)))
-      ((eq? (operator expr) '==) (eq? (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '!=) (not (= (M_value (leftop expr) state) (M_value (rightop expr) state))))
-      ((eq? (operator expr) '<) (< (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '>) (> (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '<=) (<= (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '>=) (>= (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '&&) (and (M_boolean (leftop expr) state) (M_boolean (rightop expr) state)))
-      ((eq? (operator expr) '||) (or (M_boolean (leftop expr) state) (M_boolean (rightop expr) state)))
+      ((eq? (operator expr) '!) (not (M_value (secondExpr expr) state)))
+      ((eq? (operator expr) '==) (eq? (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '!=) (not (= (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state))))
+      ((eq? (operator expr) '<) (< (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '>) (> (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '<=) (<= (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '>=) (>= (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '&&) (and (M_boolean (secondExpr expr) state) (M_boolean (thirdExpr expr) state)))
+      ((eq? (operator expr) '||) (or (M_boolean (secondExpr expr) state) (M_boolean (thirdExpr expr) state)))
       (else (error "Not a boolean")))))
