@@ -33,6 +33,12 @@
       ((eq? bool 'false) #f)
       (else (error "Invalid boolean")))))
 
+(define booleanToOutput
+  (lambda (val)
+    (cond
+      (val 'true)
+      ((not val) 'false))))
+
 (define booleanOp?
   (lambda (op)
     (cond
@@ -64,22 +70,39 @@
   (lambda (expr state)
     (if (null? (cddr expr)) 'z (M_value (rightop expr) state))))
 
+(define ifstatementhandler
+  (lambda (expr state)
+    (cond
+      ((M_boolean (leftop expr) state) (M_state (rightop expr) state))
+      (else (if (null? (cdddr expr)) state (M_state (rightrightop expr) state))))))
+
+(define minushandler
+  (lambda (expr state)
+    (if (null? (cddr expr)) (* -1 (M_value (leftop expr) state)) (- (M_value (leftop expr) state) (M_value (rightop expr) state)))))
+
+(define valueReturnHandler
+  (lambda (val)
+    (cond
+      ((number? val) val)
+      ((boolean? val) (booleanToOutput val)))))
+        
+
 (define M_state
   (lambda (expr state)
     (cond
       ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (leftop expr) (M_value (rightop expr) state) state)))
       ((eq? (operator expr) 'var) (list (append (car state) (cons (leftop expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
-      ((eq? (operator expr) 'if) (if (M_boolean (leftop expr) state) (M_state (rightop expr) state) (M_state (rightrightop expr) state)))
-      ((eq? (operator expr) 'while) (if (M_boolean (leftop expr) state) (M_state expr (M_state (rightop expr) state)) (M_state (rightrightop expr) state)))
-      ((eq? (operator expr) 'return) (M_value (leftop expr) state))
+      ((eq? (operator expr) 'if) (ifstatementhandler expr state))
+      ((eq? (operator expr) 'while) (if (M_boolean (leftop expr) state) (M_state expr (M_state (rightop expr) state)) state))
+      ((eq? (operator expr) 'return) (valueReturnHandler (M_value (leftop expr) state)))
       (else (error "Invalid state expression")
     ))))
 
 (define getUpdatedValues
   (lambda (var value state)
     (cond
+      ((not (pair? (car state))) (error "Value not declared"))
       ((eq? var (firstvar state)) (cons value (cdadr state)))
-      ((not (list? (car state))) (error "Value not initialized"))
       (else (cons (caadr state) (getUpdatedValues var value (list (cdar state) (cdadr state))))))))
 
 (define M_value
@@ -91,12 +114,12 @@
       ;((contains? expr state) (getFromState ) ;check if variable is contained in the state and substitute with its value
       ((not (list? expr)) (getFromState expr state))
       ((eq? (operator expr) '+) (+ (M_value (leftop expr) state) (M_value (rightop expr) state)))
-      ((eq? (operator expr) '-) (- (M_value (leftop expr) state) (M_value (rightop expr) state)))
+      ((eq? (operator expr) '-) (minushandler expr state))
       ((eq? (operator expr) '*) (* (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '/) (quotient (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '%) (remainder (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((booleanOp? (operator expr)) (M_boolean expr state))
-      (else error "Invalid value expression"))))
+      (else (error "Invalid value expression")))))
 
 (define firstvar
   (lambda (state)
@@ -109,15 +132,17 @@
 (define getFromState
   (lambda (var state)
     (cond
+      ((not (pair? (car state))) (error "Value not declared"))
       ((eq? var (firstvar state))
-       (if (eq? (firstval state) 'z) (error "Value not declared") (firstval state)))
-      ((not (list? (car state))) (error "Value not initialized"))
+       (if (eq? (firstval state) 'z) (error "Value not assigned") (firstval state)))
       (else (getFromState var (list (cdar state) (cdadr state)))))))
 
 (define M_boolean
   (lambda (expr state)
     (cond
       ((boolean? expr) expr)
+      ((booleanVal? expr) (booleanVal expr))
+      ((not (list? expr)) (getFromState expr state))
       ((eq? (operator expr) '!) (not (M_value (leftop expr) state)))
       ((eq? (operator expr) '==) (eq? (M_value (leftop expr) state) (M_value (rightop expr) state)))
       ((eq? (operator expr) '!=) (not (= (M_value (leftop expr) state) (M_value (rightop expr) state))))
