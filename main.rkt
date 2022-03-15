@@ -171,7 +171,7 @@
       ((null? (firstLayer state)) #f)
       ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
       ((eq? var (firstvar state)) #t)
-      (else (varDefined? var (list (cdrVars state) (cdrVals state)))))))
+      (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (cdr state)))))))
       
 
 ;Main functions
