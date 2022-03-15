@@ -25,15 +25,32 @@
 ; gets the fourth expression
 (define fourthExpr cadddr)
 
-; returns the first variable in the state
+; returns the first variable in the layer
 (define firstvar
   (lambda (state)
-    (caar state)))
+    (caaar state)))
 
-; returns the first value in the state
+; returns the first value in the layer
 (define firstval
   (lambda (state)
-    (caadr state)))
+    (caaadr state)))
+
+; adds new layer to the state
+(define addlayer
+  (lambda (state)
+    (cons '(() ()) state)))
+
+; returns the next layer in the state
+(define getNextLayer cadr)
+
+; returns the state with the top layer removed
+(define removeLayer cdr)
+
+; returns the first layers variables
+(define firstLayerVars caar)
+
+; returns the first layer
+(define firstLayer car)
 
 ; all values of the variable list except the first
 (define cdrVars cdar)
@@ -151,7 +168,8 @@
 (define varDefined?
   (lambda (var state)
     (cond
-      ((null? (car state)) #f)
+      ((null? (firstLayer state)) #f)
+      ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
       ((eq? var (firstvar state)) #t)
       (else (varDefined? var (list (cdrVars state) (cdrVals state)))))))
       
@@ -162,7 +180,7 @@
 ; call this on a file to interpret it
 (define interpret
   (lambda (filename)
-    (interpret-helper (parser filename) '(() ()))))
+    (interpret-helper (parser filename) '((() ())))))
 
 ; processes the parsetree and return the value of the tree
 (define interpret-helper
@@ -171,8 +189,6 @@
       ((not (list? state)) state)
       ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state)))
       (else (error "Invalid parse tree")))))
-
-; (var x = 5)
 
 ; returns the new state given by an expression done in an existing state
 (define M_state
