@@ -44,7 +44,7 @@
 (define getNextLayer cadr)
 
 ; returns the state with the top layer removed
-(define removeLayer cdr)
+(define getNextLayers cdr)
 
 ; returns the first layers variables
 (define firstLayerVars caar)
@@ -157,12 +157,12 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((null? (car state)) (error "Value not declared"))
-      ((eq? var (firstvar state))
-       (if (eq? (firstval state) 'z)
+      ((null? (firstLayerVars state)) (error "Value not declared"))
+      ((eq? var (firstVar state)))
+       (if (eq? (firstVal state)) 'z)
            (error "Value not assigned")
-           (firstval state)))
-      (else (getFromState var (list (cdrVars state) (cdrVals state)))))))
+           (firstVal  state))))
+      (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state))))))
 
 ; checks if a variable has been defined
 (define varDefined?
