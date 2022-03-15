@@ -2,6 +2,12 @@
 
 (require (file "simpleParser.rkt"))
 
+;;;; ***************************************************
+;;;; Jerry Chen (jmc329), Bradley Kolar (bsk61), Nicholas Ott (njo12)
+;;;; EECS 345 Spring 2022
+;;;; Simple Language Interpreter Project
+;;;; ***************************************************
+
 ;Abstractions
 ; repeated calls used throughout
 
@@ -95,9 +101,10 @@
 ; Assigns a variable its value. This defaults to 'z if there is no value assigned
 (define vardefine
   (lambda (expr state)
-    (if (null? (afterSecondExpr expr))
-        'z
-        (M_value (thirdExpr expr) state))))
+    (cond
+      ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
+      ((null? (afterSecondExpr expr)) 'z)
+      (else (M_value (thirdExpr expr) state)))))
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
@@ -133,12 +140,21 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((not (pair? (car state))) (error "Value not declared"))
+      ((null? (car state)) (error "Value not declared"))
       ((eq? var (firstvar state))
        (if (eq? (firstval state) 'z)
            (error "Value not assigned")
            (firstval state)))
       (else (getFromState var (list (cdrVars state) (cdrVals state)))))))
+
+; checks if a variable has been defined
+(define varDefined?
+  (lambda (var state)
+    (cond
+      ((null? (car state)) #f)
+      ((eq? var (firstvar state)) #t)
+      (else (varDefined? var (list (cdrVars state) (cdrVals state)))))))
+      
 
 ;Main functions
 ; the functions that do the heavy work
@@ -155,7 +171,9 @@
       ((not (list? state)) state)
       ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state)))
       (else (error "Invalid parse tree")))))
-        
+
+; (var x = 5)
+
 ; returns the new state given by an expression done in an existing state
 (define M_state
   (lambda (expr state)
