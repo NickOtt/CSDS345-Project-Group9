@@ -157,12 +157,13 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((null? (firstLayerVars state)) (error "Value not declared"))
-      ((eq? var (firstVar state)))
-       (if (eq? (firstVal state)) 'z)
+      ((null? (firstLayer state)) (error "Value not declared"))
+      ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
+      ((eq? var (firstVar state))
+       (if (eq? (firstVal state) 'z)
            (error "Value not assigned")
-           (firstVal  state))))
-      (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state))))))
+           (firstVal state)))
+      (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
 
 ; checks if a variable has been defined
 (define varDefined?
