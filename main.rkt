@@ -101,11 +101,11 @@
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
-  (lambda (expr state)
+  (lambda (expr state break)
     (cond
-      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state))
+      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state break))
       ((null? (afterFourthExpr expr)) state)
-      (else (M_state (fourthExpr expr) state)))))
+      (else (M_state (fourthExpr expr) state break)))))
 
 ; Handles if the minus operator has one or two operands
 (define minushandler
@@ -153,20 +153,21 @@
   (lambda (parsetree state)
     (cond
       ((not (list? state)) state)
-      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state)))
+      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (v) v))))
       (else (error "Invalid parse tree")))))
         
 ; returns the new state given by an expression done in an existing state
 (define M_state
-  (lambda (expr state)
+  (lambda (expr state break)
     (cond
       ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state)))
       ((eq? (operator expr) 'var) (list (append (car state) (cons (secondExpr expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
-      ((eq? (operator expr) 'if) (ifstatementhandler expr state))
-      ((eq? (operator expr) 'while) (if (M_boolean (secondExpr expr) state)
-                                        (M_state expr (M_state (thirdExpr expr) state))
-                                        state))
+      ((eq? (operator expr) 'if) (ifstatementhandler expr state break))
+      ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
+                                        (M_state expr (M_state (thirdExpr expr) state break) break)
+                                        state))))
       ((eq? (operator expr) 'return) (valueReturnHandler (M_value (secondExpr expr) state)))
+      ((eq? (operator expr) 'break) (break state))
       (else (error "Invalid state expression")
     ))))
 
