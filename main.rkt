@@ -25,15 +25,25 @@
 ; gets the fourth expression
 (define fourthExpr cadddr)
 
-; returns the first variable in the layer
-(define firstvar
+; returns the first variable in the first layer of the state
+(define firstVarState
   (lambda (state)
     (caaar state)))
 
-; returns the first value in the layer
-(define firstval
+; returns the first value in the first layer of the state
+(define firstValState
   (lambda (state)
     (caaadr state)))
+
+; returns the first variable in the current layer
+(define firstVarLayer
+  (lambda (state)
+    (caar state)))
+
+; returns the first value of the current layer
+(define firstValLayer
+  (lambda (state)
+    (caadr state)))
 
 ; adds new layer to the state
 (define addlayer
@@ -63,6 +73,12 @@
 
 ; everything after the third expression of a list
 (define afterFourthExpr cdddr)
+
+; returns the variables list of the current layer
+(define getVarsFromLayer car)
+
+; returns the values list of the current layer
+(define getValsFromLayer cadr)
 
 ;Helper Functions
 ; functions that are used to assist other methods
@@ -145,13 +161,19 @@
       ((number? val) val)
       ((boolean? val) (booleanToOutput val)))))
 
-; Gets the updated value of a variable
 (define getUpdatedValues
   (lambda (var value state)
     (cond
-      ((not (pair? (car state))) (error "Value not declared"))
-      ((eq? var (firstvar state)) (cons value (cdadr state)))
-      (else (cons (caadr state) (getUpdatedValues var value (list (cdrVars state) (cdrVals state))))))))
+      ((null? (firstLayer state)) (error "Value not declared"))
+      (else (cons (list (firstLayerVars state) (getUpdatedLayerValues (car state))) (getUpdatedValues (cdr state)))))))
+
+; Gets the updated value of a variable
+(define getUpdatedLayerValues
+  (lambda (var value layer)
+    (cond
+      ((null? (getVarsFromLayer layer)) '())
+      ((eq? var (firstVarLayer layer)) (cons value (cdrVals layer)))
+      (else (cons (firstValLayer layer) (getUpdatedLayerValues var value (list (cdrVars layer) (cdrVals layer))))))))
 
 ; gets the value of a variable from the state
 (define getFromState
@@ -159,10 +181,10 @@
     (cond
       ((null? (firstLayer state)) (error "Value not declared"))
       ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
-      ((eq? var (firstVar state))
-       (if (eq? (firstVal state) 'z)
+      ((eq? var (firstVarState state))
+       (if (eq? (firstValState state) 'z)
            (error "Value not assigned")
-           (firstVal state)))
+           (firstValState state)))
       (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
 
 ; checks if a variable has been defined
@@ -170,9 +192,9 @@
   (lambda (var state)
     (cond
       ((null? (firstLayer state)) #f)
-      ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
-      ((eq? var (firstvar state)) #t)
-      (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (cdr state)))))))
+      ((null? (firstLayerVars state)) (varDefined? var (getNextLayers state)))
+      ((eq? var (firstVarState state)) #t)
+      (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
       
 
 ;Main functions
@@ -195,7 +217,7 @@
 (define M_state
   (lambda (expr state break)
     (cond
-      ((eq? (operator expr) '=) (list (car state) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state)))
+      ((eq? (operator expr) '=) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))
       ((eq? (operator expr) 'var) (list (append (car state) (cons (secondExpr expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
       ((eq? (operator expr) 'if) (ifstatementhandler expr state break))
       ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
