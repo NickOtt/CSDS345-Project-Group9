@@ -2,6 +2,12 @@
 
 (require (file "simpleParser.rkt"))
 
+;;;; ***************************************************
+;;;; Jerry Chen (jmc329), Bradley Kolar (bsk61), Nicholas Ott (njo12)
+;;;; EECS 345 Spring 2022
+;;;; Simple Language Interpreter Project
+;;;; ***************************************************
+
 ;Abstractions
 ; repeated calls used throughout
 
@@ -19,15 +25,32 @@
 ; gets the fourth expression
 (define fourthExpr cadddr)
 
-; returns the first variable in the state
+; returns the first variable in the layer
 (define firstvar
   (lambda (state)
-    (caar state)))
+    (caaar state)))
 
-; returns the first value in the state
+; returns the first value in the layer
 (define firstval
   (lambda (state)
-    (caadr state)))
+    (caaadr state)))
+
+; adds new layer to the state
+(define addlayer
+  (lambda (state)
+    (cons '(() ()) state)))
+
+; returns the next layer in the state
+(define getNextLayer cadr)
+
+; returns the state with the top layer removed
+(define getNextLayers cdr)
+
+; returns the first layers variables
+(define firstLayerVars caar)
+
+; returns the first layer
+(define firstLayer car)
 
 ; all values of the variable list except the first
 (define cdrVars cdar)
@@ -95,9 +118,10 @@
 ; Assigns a variable its value. This defaults to 'z if there is no value assigned
 (define vardefine
   (lambda (expr state)
-    (if (null? (afterSecondExpr expr))
-        'z
-        (M_value (thirdExpr expr) state))))
+    (cond
+      ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
+      ((null? (afterSecondExpr expr)) 'z)
+      (else (M_value (thirdExpr expr) state)))))
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
@@ -133,12 +157,23 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((not (pair? (car state))) (error "Value not declared"))
-      ((eq? var (firstvar state))
-       (if (eq? (firstval state) 'z)
+      ((null? (firstLayer state)) (error "Value not declared"))
+      ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
+      ((eq? var (firstVar state))
+       (if (eq? (firstVal state) 'z)
            (error "Value not assigned")
-           (firstval state)))
-      (else (getFromState var (list (cdrVars state) (cdrVals state)))))))
+           (firstVal state)))
+      (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
+
+; checks if a variable has been defined
+(define varDefined?
+  (lambda (var state)
+    (cond
+      ((null? (firstLayer state)) #f)
+      ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
+      ((eq? var (firstvar state)) #t)
+      (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (cdr state)))))))
+      
 
 ;Main functions
 ; the functions that do the heavy work
@@ -146,7 +181,7 @@
 ; call this on a file to interpret it
 (define interpret
   (lambda (filename)
-    (interpret-helper (parser filename) '(() ()))))
+    (interpret-helper (parser filename) '((() ())))))
 
 ; processes the parsetree and return the value of the tree
 (define interpret-helper
@@ -155,7 +190,7 @@
       ((not (list? state)) state)
       ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (v) v))))
       (else (error "Invalid parse tree")))))
-        
+
 ; returns the new state given by an expression done in an existing state
 (define M_state
   (lambda (expr state break)
