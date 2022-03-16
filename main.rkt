@@ -35,6 +35,13 @@
   (lambda (state)
     (caaadr state)))
 
+; returns box with redefined value
+(define redefFirstValState
+  (lambda (state value)
+    (begin (set-box! (firstVarState state) value) (unbox (firstVarState state))))
+
+; returns 
+
 ; adds new layer to the state
 (define addlayer
   (lambda (state)
@@ -120,7 +127,7 @@
   (lambda (expr state)
     (cond
       ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
-      ((null? (afterSecondExpr expr)) 'z)
+      ((null? (afterSecondExpr expr)) (box 'z))
       (else (M_value (thirdExpr expr) state)))))
 
 ; Handles if the if statement has the optional else expression
@@ -142,15 +149,15 @@
 (define valueReturnHandler
   (lambda (val)
     (cond
-      ((number? val) val)
-      ((boolean? val) (booleanToOutput val)))))
+      ((number? (unbox val)) (unbox val))
+      ((boolean? (unbox val)) (booleanToOutput (unbox val))))))
 
 ; Gets the updated value of a variable
 (define getUpdatedValues
   (lambda (var value state)
     (cond
       ((not (pair? (car state))) (error "Value not declared"))
-      ((eq? var (firstvar state)) (cons value (cdadr state)))
+      ((eq? var (firstvar state)) (cons (redefFirstValState state value) (cdadr state)))
       (else (cons (caadr state) (getUpdatedValues var value (list (cdrVars state) (cdrVals state))))))))
 
 ; gets the value of a variable from the state
@@ -159,10 +166,10 @@
     (cond
       ((null? (firstLayer state)) (error "Value not declared"))
       ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
-      ((eq? var (firstVar state))
-       (if (eq? (firstVal state) 'z)
+      ((eq? var (firstvar state))
+       (if (eq? (firstval state) 'z)
            (error "Value not assigned")
-           (firstVal state)))
+           (firstval state)))
       (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
 
 ; checks if a variable has been defined
@@ -170,7 +177,7 @@
   (lambda (var state)
     (cond
       ((null? (firstLayer state)) #f)
-      ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
+      ((null? (firstLayerVars state)) (varDefined? var (getNextLayers state)))
       ((eq? var (firstvar state)) #t)
       (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (cdr state)))))))
       

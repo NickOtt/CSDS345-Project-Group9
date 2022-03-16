@@ -1,2 +1,4 @@
 
 compiled/drracket/errortrace/simpleParser_rkt.dep
+compiled/drracket/errortrace/lex_rkt.dep
+*.dep
