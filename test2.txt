@@ -1,4 +1,7 @@
-var x = 4;
-while (x == 4)
-   break;
+var x = 1;
+while (x < 4) {
+   x + 1;
+   if (x = 3) 
+      break;
+   }
 return x;

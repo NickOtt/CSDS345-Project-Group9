@@ -26,17 +26,17 @@
 (define fourthExpr cadddr)
 
 ; returns the first variable in the layer
-(define firstvar
+(define firstVar
   (lambda (state)
     (caaar state)))
 
 ; returns the first value in the layer
-(define firstval
+(define firstVal
   (lambda (state)
     (caaadr state)))
 
 ; adds new layer to the state
-(define addlayer
+(define addLayer
   (lambda (state)
     (cons '(() ()) state)))
 
@@ -150,7 +150,7 @@
   (lambda (var value state)
     (cond
       ((not (pair? (car state))) (error "Value not declared"))
-      ((eq? var (firstvar state)) (cons value (cdadr state)))
+      ((eq? var (firstVar state)) (cons value (cdadr state)))
       (else (cons (caadr state) (getUpdatedValues var value (list (cdrVars state) (cdrVals state))))))))
 
 ; gets the value of a variable from the state
@@ -170,8 +170,8 @@
   (lambda (var state)
     (cond
       ((null? (firstLayer state)) #f)
-      ((null? (firstLayerVars state)) (varDefined? var (removeLayer state)))
-      ((eq? var (firstvar state)) #t)
+      ((null? (firstLayerVars state)) (varDefined? var (getNextLayers state)))
+      ((eq? var (firstVar state)) #t)
       (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (cdr state)))))))
       
 
