@@ -48,9 +48,17 @@
 ; returns box with redefined value
 (define redefFirstValState
   (lambda (state value)
-    (begin (set-box! (firstVarState state) value) (unbox (firstVarState state))))
+    (begin (set-box! (firstVarState state) value) (unbox (firstVarState state)))))
 
-; returns
+; returns boxed value
+(define boxVal
+  (lambda (value)
+    (box value)))
+
+; returns value from its box
+(define valFromBox
+  (lambda (boxVal)
+    (unbox boxVal)))
 
 ; adds new layer to the state
 (define addlayer
@@ -146,7 +154,7 @@
   (lambda (expr state)
     (cond
       ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
-      ((null? (afterSecondExpr expr)) (box 'z))
+      ((null? (afterSecondExpr expr)) (boxVal 'z))
       (else (M_value (thirdExpr expr) state)))))
 
 ; Handles if the if statement has the optional else expression
@@ -168,8 +176,8 @@
 (define valueReturnHandler
   (lambda (val)
     (cond
-      ((number? (unbox val)) (unbox val))
-      ((boolean? (unbox val)) (booleanToOutput (unbox val))))))
+      ((number? (valFromBox val)) (valFromBox val))
+      ((boolean? (valFromBox val)) (booleanToOutput (valFromBox val))))))
 
 ;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
 
@@ -184,7 +192,7 @@
   (lambda (var value layer)
     (cond
       ((null? (getVarsFromLayer layer)) '())
-      ((eq? var (firstVarLayer layer)) (cons value (cdrVals layer)))
+      ((eq? var (firstVarLayer layer)) (cons (boxVal value) (cdrVals layer))) ;(()())
       (else (cons (firstValLayer layer) (getUpdatedValuesLayer var value (list (cdrVars layer) (cdrVals layer))))))))
 
 ; gets the value of a variable from the state
@@ -194,9 +202,9 @@
       ((null? (firstLayer state)) (error "Value not declared"))
       ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
       ((eq? var (firstVarState state))
-       (if (eq? (firstValState state) 'z)
+       (if (eq? (valFromBox (firstValState state)) 'z)
            (error "Value not assigned")
-           (firstValState state)))
+           (valFromBox (firstValState state))))
       (else (getFromState var (cons (list (cdrVars (firstLayer state)) (cdrVals (firstLayer state))) (getNextLayers state)))))))
 
 ; checks if a variable has been defined
