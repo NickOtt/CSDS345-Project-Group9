@@ -33,7 +33,7 @@
 ; returns the first value in the first layer of the state
 (define firstValState
   (lambda (state)
-    (caaadr state)))
+    (caadar state)))
 
 ; returns the first variable in the current layer
 (define firstVarLayer
@@ -56,8 +56,11 @@
 ; returns the state with the top layer removed
 (define getNextLayers cdr)
 
-; returns the first layers variables
+; returns the first layer's variables
 (define firstLayerVars caar)
+
+; returns the first layer's values
+(define firstLayerVals cadar)
 
 ; returns the first layer
 (define firstLayer car)
@@ -131,11 +134,11 @@
       ((eq? op '||) #t)
       (else #f))))
 
-; Assigns a variable its value. This defaults to 'z if there is no value assigned
+; Returns the value of a variable when it's defined. This defaults to 'z if there is no value to be assigned
 (define vardefine
   (lambda (expr state)
     (cond
-      ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
+      ((varDefined? (secondExpr expr) state) (M_state '(var x 2) '(((a b c d) (1 2 3 4)) ((y u w z) (5 4 3 2)) ((a b e x s) (1 2 3 4 5))) (lambda (v) v))(error "Redefine Error"))
       ((null? (afterSecondExpr expr)) 'z)
       (else (M_value (thirdExpr expr) state)))))
 
@@ -161,19 +164,21 @@
       ((number? val) val)
       ((boolean? val) (booleanToOutput val)))))
 
+;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
+
 (define getUpdatedValues
   (lambda (var value state)
     (cond
-      ((null? (firstLayer state)) (error "Value not declared"))
-      (else (cons (list (firstLayerVars state) (getUpdatedLayerValues (car state))) (getUpdatedValues (cdr state)))))))
+      ((null? state) (error "Value not declared"))
+      (else (firstLayerVars state) (cons (list (firstLayerVars state) (getUpdatedValuesLayer var value (firstLayer state)))
+                                            (if (varDefined? var (cons (firstLayer state) '())) (getNextLayers state) (getUpdatedValues var value (getNextLayers state))))))))
 
-; Gets the updated value of a variable
-(define getUpdatedLayerValues
+(define getUpdatedValuesLayer
   (lambda (var value layer)
     (cond
       ((null? (getVarsFromLayer layer)) '())
       ((eq? var (firstVarLayer layer)) (cons value (cdrVals layer)))
-      (else (cons (firstValLayer layer) (getUpdatedLayerValues var value (list (cdrVars layer) (cdrVals layer))))))))
+      (else (cons (firstValLayer layer) (getUpdatedValuesLayer var value (list (cdrVars layer) (cdrVals layer))))))))
 
 ; gets the value of a variable from the state
 (define getFromState
@@ -185,16 +190,16 @@
        (if (eq? (firstValState state) 'z)
            (error "Value not assigned")
            (firstValState state)))
-      (else (getFromState var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
+      (else (getFromState var (cons (list (cdrVars (firstLayer state)) (cdrVals (firstLayer state))) (getNextLayers state)))))))
 
 ; checks if a variable has been defined
 (define varDefined?
   (lambda (var state)
     (cond
-      ((null? (firstLayer state)) #f)
+      ((null? state) #f)
       ((null? (firstLayerVars state)) (varDefined? var (getNextLayers state)))
       ((eq? var (firstVarState state)) #t)
-      (else (varDefined? var (cons (list (cdrVars state) (cdrVals state)) (getNextLayers state)))))))
+      (else (varDefined? var (cons (list (cdrVars (firstLayer state)) (cdrVals (firstLayer state))) (getNextLayers state)))))))
       
 
 ;Main functions
@@ -218,7 +223,7 @@
   (lambda (expr state break)
     (cond
       ((eq? (operator expr) '=) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))
-      ((eq? (operator expr) 'var) (list (append (car state) (cons (secondExpr expr) '())) (append (car (cdr state)) (cons (vardefine expr state) '()))))
+      ((eq? (operator expr) 'var) (cons (list (append (firstLayerVars state) (cons (secondExpr expr) '())) (append (firstLayerVals state) (cons (vardefine expr state) '()))) (getNextLayers state)))
       ((eq? (operator expr) 'if) (ifstatementhandler expr state break))
       ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
                                         (M_state expr (M_state (thirdExpr expr) state break) break)
