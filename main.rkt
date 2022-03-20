@@ -260,7 +260,9 @@
       ((eq? (operator expr) '*) (* (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((eq? (operator expr) '/) (quotient (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((eq? (operator expr) '%) (remainder (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
-      ((eq? (operator expr) '=) (M_state (secondExpr expr) state (lambda (v) v)))
+      ((eq? (operator expr) '=) (if (number? (thirdExpr expr))
+                                    (M_value (secondExpr expr) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))
+                                    (M_value (secondExpr expr) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))));(M_state (thirdExpr expr) state (lambda (v) v))) state)))) ;(getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state)))
       ((booleanOp? (operator expr)) (M_boolean expr state))
       (else (error "Invalid value expression")))))
 
