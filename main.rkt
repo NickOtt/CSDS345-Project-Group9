@@ -265,19 +265,21 @@
       ((eq? (operator expr) 'return) (return (valueReturnHandler (M_value (secondExpr expr) state))))
       ((eq? (operator expr) 'break) (break (getNextLayers state)))
       ((eq? (operator expr) 'continue) (continue state))
-      ((eq? (operator expr) 'throw) (throw state secondExpr))
+      ((eq? (operator expr) 'throw) (throw state (secondExpr expr)))
       ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addLayer state) break continue next return throw))
       ((eq? (operator expr) 'try) (let* ([newBreak (lambda (s) (M_state (fourthExpr expr) s break continue break return throw))]
                                          [newContinue (lambda (s) (M_state (fourthExpr expr) s break continue continue return throw))]
                                          [newNext (lambda (s) (M_state (fourthExpr expr) s break continue next return throw))]
-                                         [newThrow (lambda (s exception) (M_state (thirdExpr expr) (M_state (cons 'var exception) state break continue next return throw) newBreak newContinue newNext return
+                                         [newThrow (lambda (s exception) (M_state (thirdExpr expr) (M_state (cons 'var (list (firstExpr (secondExpr (thirdExpr expr))) exception)) s newBreak newContinue newNext return throw) newBreak newContinue newNext return
                                                                                   (lambda (s1 exception1) (M_state (fourthExpr expr) s1
                                                                                                                    (lambda (s2) (throw s2 exception1))
                                                                                                                    (lambda (s2) (throw s2 exception1))
                                                                                                                    (lambda (s2) (throw s2 exception1))
                                                                                                                    (lambda (s2) (throw s2 exception1))
                                                                                                                    throw))))])
-                                    (beginHandler (secondExpr expr) (addLayer state) newBreak newContinue newNext return newThrow)))
+                                    (newNext (beginHandler (secondExpr expr) (addLayer state) newBreak newContinue newNext return newThrow))))
+      ((eq? (operator expr) 'catch) (beginHandler (thirdExpr expr) (addLayer state) break continue next return throw))
+      ((eq? (operator expr) 'finally) (beginHandler (secondExpr expr) (addLayer state) break continue next return throw))
       (else (error "Invalid state expression")
     ))))
 
