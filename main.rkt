@@ -16,6 +16,9 @@
   (lambda (expr)
     (car expr)))
 
+; gets the first expression
+(define firstExpr car)
+
 ; gets the second expression
 (define secondExpr cadr)
 
@@ -209,7 +212,7 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((null? (firstLayer state)) (error "Value not declared"))
+      ((null? state) (error "Value not declared"))
       ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
       ((eq? var (firstVarState state))
        (if (eq? (valFromBox (firstValState state)) 'z)
@@ -253,14 +256,21 @@
       ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
                                         (M_state expr (call/cc (lambda (continue) (M_state (thirdExpr expr) state break continue))) break continue)
                                         state))))
-      ((eq? (operator expr) 'return) (valueReturnHandler (M_value (secondExpr expr) state)))
-      ((eq? (operator expr) 'break) (break state))
+      ((eq? (operator expr) 'return) (break (valueReturnHandler (M_value (secondExpr expr) state))))
+      ((eq? (operator expr) 'break) (break (getNextLayers state)))
       ((eq? (operator expr) 'continue) (continue state))
       ((eq? (operator expr) 'throw) (break state))
-      ((eq? (operator expr) 'begin) (if (null? (afterSecondExpr expr)) (M_state (secondExpr expr) state break continue) 
-                                        (M_state (cons (operator expr) (afterSecondExpr expr)) (M_state (secondExpr expr) state break continue) break continue)))
+      ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addNewLayer state) break continue))
       (else (error "Invalid state expression")
     ))))
+
+(define addNewLayer
+  (lambda (state)
+    (cons '(() ()) state)))
+    
+(define beginHandler
+  (lambda (expr state break continue)
+    (if (null? expr) (getNextLayers state) (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue) break continue))))
 
 ; returns the value of a given expression. This could be an integer or a boolean
 (define M_value
