@@ -172,11 +172,11 @@
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
-  (lambda (expr state break continue)
+  (lambda (expr state break continue next return throw)
     (cond
-      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state break continue))
+      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state break continue next return throw))
       ((null? (afterFourthExpr expr)) state)
-      (else (M_state (fourthExpr expr) state break continue)))))
+      (else (M_state (fourthExpr expr) state break continue next return throw)))))
 
 ; Handles if the minus operator has one or two operands
 (define minushandler
@@ -195,8 +195,8 @@
 
 ; Handles block statements that start with begin
 (define beginHandler
-  (lambda (expr state break continue)
-    (if (null? expr) (getNextLayers state) (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue) break continue))))
+  (lambda (expr state break continue next return throw)
+    (if (null? expr) (getNextLayers state) (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue next return throw) break continue next return throw))))
 
 ;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
 
@@ -248,25 +248,36 @@
   (lambda (parsetree state)
     (cond
       ((not (list? state)) state)
-      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (break) break) (lambda (continue) continue))))
+      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (break) break) (lambda (continue) continue) (lambda (next) next) (lambda (throw) throw) (lambda (return) return))))
       (else (error "Invalid parse tree")))))
 
 ; (M_state '(while (< x 5) (begin (= y (+ y 2)) (= x (+ x 1)))) '(((x y) (#&1 #&0))) (lambda (break) break) (lambda (continue) continue))
 ; returns the new state given by an expression done in an existing state
 (define M_state
-  (lambda (expr state break continue)
+  (lambda (expr state break continue next return throw)
     (cond
       ((eq? (operator expr) '=) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))
       ((eq? (operator expr) 'var) (cons (list (append (firstLayerVars state) (cons (secondExpr expr) '())) (append (firstLayerVals state) (cons (vardefine expr state) '()))) (getNextLayers state)))
-      ((eq? (operator expr) 'if) (ifstatementhandler expr state break continue))
+      ((eq? (operator expr) 'if) (ifstatementhandler expr state break continue next return throw))
       ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
-                                        (M_state expr (call/cc (lambda (continue) (M_state (thirdExpr expr) state break continue))) break continue)
+                                        (M_state expr (call/cc (lambda (continue) (M_state (thirdExpr expr) state break continue next return throw))) break continue next return throw)
                                         state))))
-      ((eq? (operator expr) 'return) (break (valueReturnHandler (M_value (secondExpr expr) state))))
+      ((eq? (operator expr) 'return) (return (valueReturnHandler (M_value (secondExpr expr) state))))
       ((eq? (operator expr) 'break) (break (getNextLayers state)))
       ((eq? (operator expr) 'continue) (continue state))
-      ((eq? (operator expr) 'throw) (break state))
-      ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addLayer state) break continue))
+      ((eq? (operator expr) 'throw) (throw state secondExpr))
+      ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addLayer state) break continue next return throw))
+      ((eq? (operator expr) 'try) (let* ([newBreak (lambda (s) (M_state (fourthExpr expr) s break continue break return throw))]
+                                         [newContinue (lambda (s) (M_state (fourthExpr expr) s break continue continue return throw))]
+                                         [newNext (lambda (s) (M_state (fourthExpr expr) s break continue next return throw))]
+                                         [newThrow (lambda (s exception) (M_state (thirdExpr expr) (M_state (cons 'var exception) state break continue next return throw) newBreak newContinue newNext return
+                                                                                  (lambda (s1 exception1) (M_state (fourthExpr expr) s1
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   throw))))])
+                                    (beginHandler (secondExpr expr) (addLayer state) newBreak newContinue newNext return newThrow)))
       (else (error "Invalid state expression")
     ))))
 
