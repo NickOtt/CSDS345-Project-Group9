@@ -199,7 +199,7 @@
 (define getFromState
   (lambda (var state)
     (cond
-      ((null? (firstLayer state)) (error "Value not declared"))
+      ((null? state) (error "Value not declared"))
       ((null? (firstLayerVars state)) (getFromState var (getNextLayers state)))
       ((eq? var (firstVarState state))
        (if (eq? (valFromBox (firstValState state)) 'z)
@@ -260,6 +260,7 @@
       ((eq? (operator expr) '*) (* (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((eq? (operator expr) '/) (quotient (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
       ((eq? (operator expr) '%) (remainder (M_value (secondExpr expr) state) (M_value (thirdExpr expr) state)))
+      ((eq? (operator expr) '=) (M_state (secondExpr expr) state (lambda (v) v)))
       ((booleanOp? (operator expr)) (M_boolean expr state))
       (else (error "Invalid value expression")))))
 
