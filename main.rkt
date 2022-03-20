@@ -64,7 +64,7 @@
     (unbox boxVal)))
 
 ; adds new layer to the state
-(define addlayer
+(define addLayer
   (lambda (state)
     (cons '(() ()) state)))
 
@@ -192,6 +192,12 @@
       ((number? val) val)
       ((boolean? val) (booleanToOutput val)))))
 
+
+; Handles block statements that start with begin
+(define beginHandler
+  (lambda (expr state break continue)
+    (if (null? expr) (getNextLayers state) (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue) break continue))))
+
 ;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
 
 (define getUpdatedValues
@@ -260,17 +266,9 @@
       ((eq? (operator expr) 'break) (break (getNextLayers state)))
       ((eq? (operator expr) 'continue) (continue state))
       ((eq? (operator expr) 'throw) (break state))
-      ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addNewLayer state) break continue))
+      ((eq? (operator expr) 'begin) (beginHandler (afterFirstExpr expr) (addLayer state) break continue))
       (else (error "Invalid state expression")
     ))))
-
-(define addNewLayer
-  (lambda (state)
-    (cons '(() ()) state)))
-    
-(define beginHandler
-  (lambda (expr state break continue)
-    (if (null? expr) (getNextLayers state) (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue) break continue))))
 
 ; returns the value of a given expression. This could be an integer or a boolean
 (define M_value
