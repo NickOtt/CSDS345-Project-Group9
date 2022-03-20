@@ -86,6 +86,9 @@
 ; all value of the value list except the first
 (define cdrVals cdadr)
 
+; everything after the first expression in a list
+(define afterFirstExpr cdr)
+
 ; everything after the second expression in a list
 (define afterSecondExpr cddr)
 
@@ -110,6 +113,13 @@
       ((eq? (operator expr) 'if) #t)
       ((eq? (operator expr) 'while) #t)
       ((eq? (operator expr) 'return) #t)
+      ((eq? (operator expr) 'begin) #t)
+      ((eq? (operator expr) 'break) #t)
+      ((eq? (operator expr) 'continue) #t)
+      ((eq? (operator expr) 'throw) #t)
+      ((eq? (operator expr) 'catch) #t)
+      ((eq? (operator expr) 'try) #t)
+      ((eq? (operator expr) 'finally) #t)
       (else #f))))
 
 ; checks if the expression is a boolean value
@@ -155,15 +165,15 @@
     (cond
       ((varDefined? (secondExpr expr) state) (error "Redefine Error"))
       ((null? (afterSecondExpr expr)) (boxVal 'z))
-      (else (M_value (thirdExpr expr) state)))))
+      (else (boxVal (M_value (thirdExpr expr) state))))))
 
 ; Handles if the if statement has the optional else expression
 (define ifstatementhandler
-  (lambda (expr state break)
+  (lambda (expr state break continue)
     (cond
-      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state break))
+      ((M_boolean (secondExpr expr) state) (M_state (thirdExpr expr) state break continue))
       ((null? (afterFourthExpr expr)) state)
-      (else (M_state (fourthExpr expr) state break)))))
+      (else (M_state (fourthExpr expr) state break continue)))))
 
 ; Handles if the minus operator has one or two operands
 (define minushandler
@@ -176,8 +186,8 @@
 (define valueReturnHandler
   (lambda (val)
     (cond
-      ((number? (valFromBox val)) (valFromBox val))
-      ((boolean? (valFromBox val)) (booleanToOutput (valFromBox val))))))
+      ((number? val) val)
+      ((boolean? val) (booleanToOutput val)))))
 
 ;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
 
@@ -229,21 +239,26 @@
   (lambda (parsetree state)
     (cond
       ((not (list? state)) state)
-      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (v) v))))
+      ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (break) break) (lambda (continue) continue))))
       (else (error "Invalid parse tree")))))
 
+; (M_state '(while (< x 5) (begin (= y (+ y 2)) (= x (+ x 1)))) '(((x y) (#&1 #&0))) (lambda (break) break) (lambda (continue) continue))
 ; returns the new state given by an expression done in an existing state
 (define M_state
-  (lambda (expr state break)
+  (lambda (expr state break continue)
     (cond
       ((eq? (operator expr) '=) (getUpdatedValues (secondExpr expr) (M_value (thirdExpr expr) state) state))
       ((eq? (operator expr) 'var) (cons (list (append (firstLayerVars state) (cons (secondExpr expr) '())) (append (firstLayerVals state) (cons (vardefine expr state) '()))) (getNextLayers state)))
-      ((eq? (operator expr) 'if) (ifstatementhandler expr state break))
+      ((eq? (operator expr) 'if) (ifstatementhandler expr state break continue))
       ((eq? (operator expr) 'while) (call/cc (lambda (break) (if (M_boolean (secondExpr expr) state)
-                                        (M_state expr (M_state (thirdExpr expr) state break) break)
+                                        (M_state expr (call/cc (lambda (continue) (M_state (thirdExpr expr) state break continue))) break continue)
                                         state))))
       ((eq? (operator expr) 'return) (valueReturnHandler (M_value (secondExpr expr) state)))
       ((eq? (operator expr) 'break) (break state))
+      ((eq? (operator expr) 'continue) (continue state))
+      ((eq? (operator expr) 'throw) (break state))
+      ((eq? (operator expr) 'begin) (if (null? (afterSecondExpr expr)) (M_state (secondExpr expr) state break continue) 
+                                        (M_state (cons (operator expr) (afterSecondExpr expr)) (M_state (secondExpr expr) state break continue) break continue)))
       (else (error "Invalid state expression")
     ))))
 
