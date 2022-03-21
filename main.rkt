@@ -5,7 +5,7 @@
 ;;;; ***************************************************
 ;;;; Jerry Chen (jmc329), Bradley Kolar (bsk61), Nicholas Ott (njo12)
 ;;;; EECS 345 Spring 2022
-;;;; Simple Language Interpreter Project
+;;;; Flow Control Interpreter Project
 ;;;; ***************************************************
 
 ;Abstractions
@@ -200,14 +200,29 @@
         (getNextLayers state)
         (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue next return throw) break continue next return throw))))
 
+; Handles try block and catches when the expression is null
 (define tryHandler
   (lambda (expr state break continue next return throw)
     (if (null? expr)
         (next (getNextLayers state))
         (beginHandler (cdr expr) (M_state (firstExpr expr) state break continue next return throw) break continue next return throw))))
 
-;(getUpdatedValues 'x '5 '(((a b c) (1 5 7)) ((y x z) (2 3 6))))
+; Helper function for try-catch-finally continutations
+(define tryHelper
+  (lambda (expr state break continue next return throw)
+    (let* ([newBreak (lambda (s) (M_state (fourthExpr expr) s break continue break return throw))]
+                                         [newContinue (lambda (s) (M_state (fourthExpr expr) s break continue continue return throw))]
+                                         [newNext (lambda (s) (M_state (fourthExpr expr) s break continue next return throw))]
+                                         [newThrow (lambda (s exception) (M_state (thirdExpr expr) (M_state (cons 'var (list (firstExpr (secondExpr (thirdExpr expr))) exception)) s newBreak newContinue newNext return throw) newBreak newContinue newNext return
+                                                                                  (lambda (s1 exception1) (M_state (fourthExpr expr) s1
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   (lambda (s2) (throw s2 exception1))
+                                                                                                                   throw))))])
+                                    (tryHandler (secondExpr expr) (addLayer state) newBreak newContinue newNext return newThrow))))
 
+; Updates the state with the new value assigned to the variable and returns the state
 (define getUpdatedValues
   (lambda (var value state)
     (cond
@@ -215,6 +230,7 @@
       (else (firstLayerVars state) (cons (list (firstLayerVars state) (getUpdatedValuesLayer var value (firstLayer state)))
                                             (if (varDefined? var (cons (firstLayer state) '())) (getNextLayers state) (getUpdatedValues var value (getNextLayers state))))))))
 
+; Updates the proper layer with the new value assigned to the variable and returns the layer
 (define getUpdatedValuesLayer
   (lambda (var value layer)
     (cond
@@ -259,7 +275,6 @@
       ((state? (car parsetree)) (interpret-helper (cdr parsetree) (M_state (car parsetree) state (lambda (break) break) (lambda (continue) continue) (lambda (next) next) (lambda (throw) throw) (lambda (return) return))))
       (else (error "Invalid parse tree")))))
 
-; (M_state '(while (< x 5) (begin (= y (+ y 2)) (= x (+ x 1)))) '(((x y) (#&1 #&0))) (lambda (break) break) (lambda (continue) continue))
 ; returns the new state given by an expression done in an existing state
 (define M_state
   (lambda (expr state break continue next return throw)
@@ -282,20 +297,6 @@
       ((eq? (operator expr) 'finally) (beginHandler (secondExpr expr) (addLayer state) break continue next return throw))
       (else (error "Invalid state expression")
     ))))
-
-(define tryHelper
-  (lambda (expr state break continue next return throw)
-    (let* ([newBreak (lambda (s) (M_state (fourthExpr expr) s break continue break return throw))]
-                                         [newContinue (lambda (s) (M_state (fourthExpr expr) s break continue continue return throw))]
-                                         [newNext (lambda (s) (M_state (fourthExpr expr) s break continue next return throw))]
-                                         [newThrow (lambda (s exception) (M_state (thirdExpr expr) (M_state (cons 'var (list (firstExpr (secondExpr (thirdExpr expr))) exception)) s newBreak newContinue newNext return throw) newBreak newContinue newNext return
-                                                                                  (lambda (s1 exception1) (M_state (fourthExpr expr) s1
-                                                                                                                   (lambda (s2) (throw s2 exception1))
-                                                                                                                   (lambda (s2) (throw s2 exception1))
-                                                                                                                   (lambda (s2) (throw s2 exception1))
-                                                                                                                   (lambda (s2) (throw s2 exception1))
-                                                                                                                   throw))))])
-                                    (tryHandler (secondExpr expr) (addLayer state) newBreak newContinue newNext return newThrow))))
 
 ; returns the value of a given expression. This could be an integer or a boolean
 (define M_value
