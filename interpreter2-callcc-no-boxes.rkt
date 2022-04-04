@@ -95,6 +95,19 @@
   (lambda (statement environment throw)
     (throw (eval-expression (get-expr statement) environment) environment)))
 
+; Interpret file with main() method and functions
+
+;Run through global variables and function and add to state before calling main()
+(define create-base-layer
+  (lambda (statement-list environment)
+    (cond
+      ((null? (car statement-list)) environment)
+      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list)))))))
+
+(define make-closure
+  (lambda (formal-params body func-def-state)
+    (list formal-params body 
+
 ; Interpret a try-catch-finally block
 
 ; Create a continuation for the throw.  If there is no catch, it has to interpret the finally block, and once that completes throw the exception.
