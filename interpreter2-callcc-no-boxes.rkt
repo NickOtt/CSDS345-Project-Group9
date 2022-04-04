@@ -106,7 +106,7 @@
 
 (define make-closure
   (lambda (formal-params body func-def-state)
-    (list formal-params body 
+    (list formal-params body func-def-state)))
 
 ; Interpret a try-catch-finally block
 
