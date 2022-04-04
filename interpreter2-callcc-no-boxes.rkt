@@ -42,6 +42,7 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -94,6 +95,14 @@
 (define interpret-throw
   (lambda (statement environment throw)
     (throw (eval-expression (get-expr statement) environment) environment)))
+;
+(define interpret-function
+  (lambda (statement environment return break continue throw)
+    (; get closure
+     ; set functionstate1 to the combined closure state and current state
+     ; set functionstate2 to the functionstate1 with the formal parameter bindings
+     ;call M_state on the body in functionstate2
+     )))
 
 ; Interpret file with main() method and functions
 
@@ -104,6 +113,7 @@
       ((null? (car statement-list)) environment)
       (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list)))))))
 
+; Makes the closure for a function
 (define make-closure
   (lambda (formal-params body func-def-state)
     (list formal-params body func-def-state)))
