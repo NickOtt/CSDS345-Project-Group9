@@ -1,6 +1,6 @@
 ; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
-(require "simpleParser.rkt")
+(require "functionParser.rkt")
 ; (load "simpleParser.scm")
 
 
@@ -17,7 +17,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (parser file) (newenvironment) return
+        (create-base-layer (parser file) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -98,20 +98,22 @@
 ;
 (define interpret-function
   (lambda (statement environment return break continue throw)
-    (; get closure
+    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment) environment)
+     ; get closure
      ; set functionstate1 to the combined closure state and current state
      ; set functionstate2 to the functionstate1 with the formal parameter bindings
      ;call M_state on the body in functionstate2
-     )))
+     ))
 
 ; Interpret file with main() method and functions
 
 ;Run through global variables and function and add to state before calling main()
 (define create-base-layer
-  (lambda (statement-list environment)
+  (lambda (statement-list environment return break continue throw)
     (cond
-      ((null? (car statement-list)) environment)
-      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list)))))))
+      ((null? statement-list) environment)
+      ((eq? 'main (operand1 (car statement-list))) (create-base-layer (cdr statement-list) environment return break continue throw))
+      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
 
 ; Makes the closure for a function
 (define make-closure
@@ -166,7 +168,7 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
+; Evaluates all possible boolean and arithmetic expressions and function calls, including constants and variables.
 (define eval-expression
   (lambda (expr environment)
     (cond
@@ -174,7 +176,28 @@
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
       ((not (list? expr)) (lookup expr environment))
+      ((eq? (car expr) 'funcall) (eval-function expr environment (lambda (s) "exception thrown")))
       (else (eval-operator expr environment)))))
+
+(define eval-function
+  (lambda (expr environment throw)
+    (interpret-statement (body (closure expr environment)) (bind-parameters (formalparams (closure expr environment)) (cddr expr) (append (closure-state (closure expr environment)) environment) environment) (lambda (v) v) (lambda (s) (myerror "break used outside of loop!")) (lambda (s) (myerror "no return statemnet")) throw)))
+
+(define bind-parameters
+  (lambda (params args fstate state)
+    (if (null? params)
+        fstate
+        (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state) fstate) state))))
+
+(define closure
+  (lambda (expr environment)
+    (lookup (operand1 expr) environment)))
+
+(define formalparams car)
+
+(define body caadr)
+
+(define closure-state caddr)
 
 ; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
 ; pass the result to eval-binary-op2 to evaluate the right operand.  This forces the operands to be evaluated in the proper order in case you choose
