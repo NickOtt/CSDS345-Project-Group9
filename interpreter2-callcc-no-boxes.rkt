@@ -17,9 +17,26 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (create-base-layer (parser file) (newenvironment) return
-                                  (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
-                                  (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+        (interpret-main (parser file)
+                        (create-base-layer (parser file)
+                                           (newenvironment)
+                                           return
+                                           (lambda (env) (myerror "Break used outside of loop"))
+                                           (lambda (env) (myerror "Continue used outside of loop"))
+                                           (lambda (v env) (myerror "Uncaught exception thrown")))
+                        return (lambda (env) (myerror "Break used outside of loop"))
+                        (lambda (env) (myerror "Continue used outside of loop"))
+                        (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+
+(define interpret-main
+  (lambda (statement-list environment return break continue throw)
+    (cond
+      ((null? statement-list))
+      ((eq? (function-type statement-list) 'main) (interpret-statement-list (car (main-body statement-list)) (push-frame environment) return break continue throw))
+      (else (interpret-main (cdr statement-list) environment return break continue throw)))))
+
+(define function-type cadar)
+(define main-body cdddar)
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -182,11 +199,11 @@
 (define eval-function
   (lambda (expr environment throw)
     (call/cc (lambda (return) (interpret-statement (body (closure expr environment))
-                         (bind-parameters (formalparams (closure expr environment)) (cddr expr) (append (closure-state (closure expr environment)) environment) environment)
+                         (bind-parameters (formalparams (closure expr environment)) (params expr) (push-frame (append (closure-state (closure expr environment)) environment)) environment)
                          return
                          (lambda (s) (myerror "break used outside of loop!"))
                          (lambda (s) (myerror "no return statemnet"))
-                         throw)))
+                         throw)))))
 
 (define bind-parameters
   (lambda (params args fstate state)
@@ -199,6 +216,8 @@
     (lookup (operand1 expr) environment)))
 
 (define formalparams car)
+
+(define params cddr)
 
 (define body caadr)
 
