@@ -181,7 +181,12 @@
 
 (define eval-function
   (lambda (expr environment throw)
-    (interpret-statement (body (closure expr environment)) (bind-parameters (formalparams (closure expr environment)) (cddr expr) (append (closure-state (closure expr environment)) environment) environment) (lambda (v) v) (lambda (s) (myerror "break used outside of loop!")) (lambda (s) (myerror "no return statemnet")) throw)))
+    (call/cc (lambda (return) (interpret-statement (body (closure expr environment))
+                         (bind-parameters (formalparams (closure expr environment)) (cddr expr) (append (closure-state (closure expr environment)) environment) environment)
+                         return
+                         (lambda (s) (myerror "break used outside of loop!"))
+                         (lambda (s) (myerror "no return statemnet"))
+                         throw)))
 
 (define bind-parameters
   (lambda (params args fstate state)
