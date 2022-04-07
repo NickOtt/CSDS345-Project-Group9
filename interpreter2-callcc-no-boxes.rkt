@@ -60,13 +60,13 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment (lambda (value state) state) break continue throw))
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
   (lambda (statement environment return throw)
-    (return (eval-expression (get-expr statement) environment throw) environment)))
+    (return (eval-expression (get-expr statement) environment throw))))
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
