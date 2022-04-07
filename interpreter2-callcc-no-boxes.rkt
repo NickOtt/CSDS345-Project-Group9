@@ -210,25 +210,6 @@
                          (lambda (s) (myerror "no return statemnet"))
                          throw)))))
 
-(define bind-parameters
-  (lambda (params args fstate state throw)
-    (cond
-      ((null? params) (if (null? args) fstate (throw (myerror "incorrect # of args"))))
-      ((null? args) (throw (myerror "incorrect # of args")))
-      (else (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state throw) fstate) state throw)))))
-
-(define closure
-  (lambda (expr environment)
-    (lookup (operand1 expr) environment)))
-
-(define formalparams car)
-
-(define params cddr)
-
-(define body cadr)
-
-(define closure-state caddr)
-
 ; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
 ; pass the result to eval-binary-op2 to evaluate the right operand.  This forces the operands to be evaluated in the proper order in case you choose
 ; to add side effects to the interpreter
@@ -301,9 +282,30 @@
 (define get-catch operand2)
 (define get-finally operand3)
 
+(define bind-parameters
+  (lambda (params args fstate state throw)
+    (cond
+      ((null? params) (if (null? args) fstate (throw (myerror "incorrect # of args"))))
+      ((null? args) (throw (myerror "incorrect # of args")))
+      (else (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state throw) fstate) state throw)))))
+
+
+
+; some abstractions
+(define topframe car)
+(define formalparams car)
+(define remainingframes cdr)
+(define body cadr)
+(define params cddr)
+(define closure-state caddr)
+
 (define catch-var
   (lambda (catch-statement)
     (car (operand1 catch-statement))))
+
+(define closure
+  (lambda (expr environment)
+    (lookup (operand1 expr) environment)))
 
 
 ;------------------------
@@ -329,10 +331,6 @@
 (define pop-frame
   (lambda (environment)
     (cdr environment)))
-
-; some abstractions
-(define topframe car)
-(define remainingframes cdr)
 
 ; does a variable exist in the environment?
 (define exists?
