@@ -111,7 +111,7 @@
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
   (lambda (statement environment throw)
-    (throw (eval-expression (get-expr statement) environment) environment)))
+    (throw (eval-expression (get-expr statement) environment))))
 ;
 (define interpret-function
   (lambda (statement environment return break continue throw)
@@ -193,23 +193,24 @@
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
       ((not (list? expr)) (lookup expr environment))
-      ((eq? (car expr) 'funcall) (eval-function expr environment (lambda (s) "exception thrown")))
+      ((eq? (car expr) 'funcall) (eval-function expr environment (lambda (s) "Uncaught exception thrown")))
       (else (eval-operator expr environment)))))
 
 (define eval-function
   (lambda (expr environment throw)
-    (call/cc (lambda (return) (interpret-statement (body (closure expr environment))
-                         (bind-parameters (formalparams (closure expr environment)) (params expr) (push-frame (append (closure-state (closure expr environment)) environment)) environment)
+    (call/cc (lambda (return) (interpret-statement-list (body (closure expr environment))
+                         (bind-parameters (formalparams (closure expr environment)) (params expr) (push-frame (append (closure-state (closure expr environment)) environment)) environment throw)
                          return
                          (lambda (s) (myerror "break used outside of loop!"))
                          (lambda (s) (myerror "no return statemnet"))
                          throw)))))
 
 (define bind-parameters
-  (lambda (params args fstate state)
-    (if (null? params)
-        fstate
-        (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state) fstate) state))))
+  (lambda (params args fstate state throw)
+    (cond
+      ((null? params) (if (null? args) fstate (throw (myerror "incorrect args"))))
+      ((null? args) (throw (myerror "incorrect args")))
+      (else (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state) fstate) state throw)))))
 
 (define closure
   (lambda (expr environment)
@@ -219,7 +220,7 @@
 
 (define params cddr)
 
-(define body caadr)
+(define body cadr)
 
 (define closure-state caddr)
 
