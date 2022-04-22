@@ -1,3 +1,9 @@
+;;;; ***************************************************
+;;;; Jerry Chen (jmc329) Nicholas Ott (njo12) Bradley Kolar (bsk61)
+;;;; EECS 345 Spring 2022
+;;;; Imperitive Language Project
+;;;; ***************************************************
+
 ; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
 (require "functionParser.rkt")
