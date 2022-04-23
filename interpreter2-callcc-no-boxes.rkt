@@ -6,7 +6,7 @@
 
 ; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
 #lang racket
-(require "functionParser.rkt")
+(require "classParser.rkt")
 ; (load "simpleParser.scm")
 
 
@@ -19,97 +19,163 @@
 
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
-  (lambda (file)
+  (lambda (file class-name)
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-main (parser file)
-                        (create-base-layer (parser file)
+        (interpret-main class-name
+                        (create-global-environment (parser file)
                                            (newenvironment)
                                            return
                                            (lambda (env) (myerror "Break used outside of loop"))
                                            (lambda (env) (myerror "Continue used outside of loop"))
                                            (lambda (v env) (myerror "Uncaught exception thrown")))
+                        (newenvironment)
+                        (newenvironment)
                         return (lambda (env) (myerror "Break used outside of loop"))
                         (lambda (env) (myerror "Continue used outside of loop"))
                         (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
-(define interpret-main
-  (lambda (statement-list environment return break continue throw)
+(define create-global-environment
+  (lambda (statement-list environment-global return break continue throw)
     (cond
-      ((null? statement-list))
-      ((eq? (function-type statement-list) 'main) (interpret-statement-list (car (main-body statement-list)) (push-frame environment) return break continue throw))
-      (else (interpret-main (cdr statement-list) environment return break continue throw)))))
+      ((null? statement-list) environment-global)
+      (else (create-global-environment (cdr statement-list)
+                              (insert
+                               (class-name statement-list)
+                               (make-class-closure (class-extends-body statement-list) empty-class-closure environment-global)
+                               environment-global)
+                              return break continue throw)))))
 
+(define make-class-closure
+  (lambda (class-definition closure environment-global)
+    (cond
+      ((null? class-definition) closure)
+      ((null? (car class-definition)) (make-class-closure (cadr class-definition) closure environment-global))
+      ((eq? (class-definition-type class-definition) 'extends)
+       (make-class-closure (cadr class-definition) (list
+                                                   (cons (class-name class-definition) '())
+                                                   (cadr (lookup (class-name class-definition) environment-global))
+                                                   (caddr (lookup (class-name class-definition) environment-global)))) environment-global)
+      ((or (eq? (class-definition-type class-definition) 'static-function)
+           (eq? (class-definition-type class-definition) 'function))
+       (make-class-closure (cdr class-definition) (list
+                                                   (class-closure-super closure)
+                                                   (add-to-class-closure (class-function-name class-definition) (make-closure (class-function-params (class-function class-definition)) (class-function-body (class-function class-definition)) environment-global) (class-closure-functions closure))
+                                                   (class-closure-instances closure))
+                           environment-global))
+      ((eq? (class-definition-type class-definition) 'var)
+       (make-class-closure (cdr class-definition) (list
+                                                   (class-closure-super closure)
+                                                   (class-closure-functions closure)
+                                                   (add-to-class-closure (class-variable-name class-definition) (get-var-value (car class-definition)) (class-closure-instances closure)))
+                           environment-global))
+      (else myerror "invalid class body"))))
+
+; Add a new variable/value or function/body pair to the class closure.
+(define add-to-class-closure
+  (lambda (var val class-closure)
+    (if (exists-in-list? var (variables class-closure))
+        (myerror "error: variable is being re-declared:" var)
+        (list (cons var (variables class-closure)) (cons (box (scheme->language val)) (store class-closure))))))
+
+;(((A) (#&(() ((main) (#&(() ((var a (new A)) (return (+ (dot a x) (dot a y)))) ((() ()))))) ((y x) (#&10 #&5))))))
+(define interpret-main
+  (lambda (class-name environment-global environment-instance environment-method return break continue throw)
+    (interpret-statement-list
+     (get-main-body (lookup-in-frame 'main (get-class-function-list (lookup (string->symbol class-name) environment-global))))
+     environment-global
+     environment-instance
+     environment-method
+     return break continue throw)))
+
+
+(define class-definition-type caar)
+(define empty-class-closure '(() (() ()) (() ())))
+(define class-closure-super car)
+(define class-closure-functions cadr)
+(define class-closure-instances caddr)
+(define class-extends-body cddar)
+(define class-variable-name cadar)
+(define class-function-name cadar)
+(define class-name cadar)
 (define function-type cadar)
 (define main-body cdddar)
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
-  (lambda (statement-list environment return break continue throw)
+  (lambda (statement-list environment-global environment-instance environment-method return break continue throw)
     (if (null? statement-list)
-        environment
-        (interpret-statement-list (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw))))
+        environment-method
+        (interpret-statement-list (cdr statement-list)
+                                  environment-global
+                                  environment-instance
+                                  (interpret-statement (car statement-list) environment-global environment-instance environment-method return break continue throw)
+                                  return break continue throw))))
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
     (cond
-      ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw))
-      ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw))
-      ((eq? '= (statement-type statement)) (interpret-assign statement environment throw))
-      ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw))
-      ((eq? 'while (statement-type statement)) (interpret-while statement environment return throw))
-      ((eq? 'continue (statement-type statement)) (continue environment))
-      ((eq? 'break (statement-type statement)) (break environment))
-      ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
-      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
-      ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment return break continue throw))
+      ((eq? 'return (statement-type statement)) (interpret-return statement environment-global environment-instance environment-method return throw))
+      ((eq? 'var (statement-type statement)) (interpret-declare statement environment-global environment-instance environment-method throw))
+      ((eq? '= (statement-type statement)) (interpret-assign statement environment-global environment-instance environment-method throw))
+      ((eq? 'if (statement-type statement)) (interpret-if statement environment-global environment-instance environment-method return break continue throw))
+      ((eq? 'while (statement-type statement)) (interpret-while statement environment-global environment-instance environment-method return throw))
+      ((eq? 'continue (statement-type statement)) (continue environment-method))
+      ((eq? 'break (statement-type statement)) (break environment-method))
+      ((eq? 'begin (statement-type statement)) (interpret-block statement environment-global environment-instance environment-method return break continue throw))
+      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment-global environment-instance environment-method throw))
+      ((eq? 'try (statement-type statement)) (interpret-try statement environment-global environment-instance environment-method return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment-global environment-instance environment-method return break continue throw))
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment-global environment-instance environment-method return break continue throw))
+;      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
+
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
-  (lambda (statement environment return throw)
-    (return (eval-expression (get-expr statement) environment throw))))
+  (lambda (statement environment-global environment-instance environment-method return throw)
+    (return (eval-expression (get-expr statement) environment-global environment-instance environment-method throw))))
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
-  (lambda (statement environment throw)
+  (lambda (statement environment-global environment-instance environment-method throw)
     (if (exists-declare-value? statement)
-        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment throw) environment)
-        (insert (get-declare-var statement) 'novalue environment))))
+        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment-global environment-instance environment-method throw) environment-method)
+        (insert (get-declare-var statement) 'novalue environment-method))))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
-  (lambda (statement environment throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment throw) environment)))
+  (lambda (statement environment-global environment-instance environment-method throw)
+    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment-global environment-instance environment-method throw) environment-global environment-instance environment-method)))
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) environment throw) (interpret-statement (get-then statement) environment return break continue throw))
-      ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
-      (else environment))))
+      ((eval-expression (get-condition statement) environment-global environment-instance environment-method throw) (interpret-statement (get-then statement) environment-global environment-instance environment-method return break continue throw))
+      ((exists-else? statement) (interpret-statement (get-else statement) environment-global environment-instance environment-method return break continue throw))
+      (else environment-method))))
 
 ; Interprets a while loop.  We must create break and continue continuations for this loop
 (define interpret-while
-  (lambda (statement environment return throw)
+  (lambda (statement environment-global environment-instance environment-method return throw)
     (call/cc
      (lambda (break)
-       (letrec ((loop (lambda (condition body environment)
-                        (if (eval-expression condition environment throw)
-                            (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
-                         environment))))
-         (loop (get-condition statement) (get-body statement) environment))))))
+       (letrec ((loop (lambda (condition body environment-method)
+                        (if (eval-expression condition environment-global environment-instance environment-method throw)
+                            (loop condition body (interpret-statement body environment-global environment-instance environment-method return break (lambda (env) (break (loop condition body env))) throw))
+                         environment-method))))
+         (loop (get-condition statement) (get-body statement) environment-method))))))
 
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
     (pop-frame (interpret-statement-list (cdr statement)
-                                         (push-frame environment)
+                                         environment-global
+                                         environment-instance
+                                         (push-frame environment-method)
                                          return
                                          (lambda (env) (break (pop-frame env)))
                                          (lambda (env) (continue (pop-frame env)))
@@ -117,17 +183,17 @@
 
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
-  (lambda (statement environment throw)
-    (throw (eval-expression (get-expr statement) environment throw) environment)))
+  (lambda (statement environment-global environment-instance environment-method throw)
+    (throw (eval-expression (get-expr statement) environment-global environment-instance environment-method throw) environment-method)))
 ;
 (define interpret-function
-  (lambda (statement environment return break continue throw)
-    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment) environment)))
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
+    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment-global environment-instance environment-method) environment-method)))
 
 (define interpret-funcall
-  (lambda (statement environment return break continue throw)
-    (interpret-statement-list (body (closure statement environment))
-                              (bind-parameters (formalparams (closure statement environment)) (params statement) (push-frame (append (closure-state (closure statement environment)) environment)) environment throw)
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
+    (interpret-statement-list (body (closure statement environment-global environment-instance environment-method))
+                              (bind-parameters (formalparams (closure statement environment-method)) (params statement) (push-frame (append (closure-state (closure statement environment-method)) environment-method)) environment-method throw)
                               return
                               (lambda (s) (myerror "break used outside of loop"))
                               (lambda (s) (myerror "no return statemnet"))
@@ -136,12 +202,12 @@
 ; Interpret file with main() method and functions
 
 ;Run through global variables and function and add to state before calling main()
-(define create-base-layer
-  (lambda (statement-list environment return break continue throw)
-    (cond
-      ((null? statement-list) environment)
-      ((eq? 'main (operand1 (car statement-list))) (create-base-layer (cdr statement-list) environment return break continue throw))
-      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
+;(define create-base-layer
+;  (lambda (statement-list environment return break continue throw)
+;    (cond
+;      ((null? statement-list) environment)
+;      ((eq? 'main (operand1 (car statement-list))) (create-base-layer (cdr statement-list) environment return break continue throw))
+;      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
 
 ; Makes the closure for a function
 (define make-closure
@@ -153,14 +219,18 @@
 ; Create a continuation for the throw.  If there is no catch, it has to interpret the finally block, and once that completes throw the exception.
 ;   Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
 (define create-throw-catch-continuation
-  (lambda (catch-statement environment return break continue throw jump finally-block)
+  (lambda (catch-statement environment-global environment-instance environment-method return break continue throw jump finally-block)
     (cond
-      ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw)))) 
+      ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block environment-global environment-instance env return break continue throw)))) 
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
       (else (lambda (ex env)
               (jump (interpret-block finally-block
+                                     environment-global
+                                     environment-instance
                                      (pop-frame (interpret-statement-list 
-                                                 (get-body catch-statement) 
+                                                 (get-body catch-statement)
+                                                 environment-global
+                                                 environment-instance
                                                  (insert (catch-var catch-statement) ex (push-frame env))
                                                  return 
                                                  (lambda (env2) (break (pop-frame env2))) 
@@ -171,17 +241,17 @@
 ; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
 (define interpret-try
-  (lambda (statement environment return break continue throw)
+  (lambda (statement environment-global environment-instance environment-method return break continue throw)
     (call/cc
      (lambda (jump)
        (let* ((finally-block (make-finally-block (get-finally statement)))
               (try-block (make-try-block (get-try statement)))
-              (new-return (lambda (v) (begin (interpret-block finally-block environment return break continue throw) (return v))))
-              (new-break (lambda (env) (break (interpret-block finally-block env return break continue throw))))
-              (new-continue (lambda (env) (continue (interpret-block finally-block env return break continue throw))))
-              (new-throw (create-throw-catch-continuation (get-catch statement) environment return break continue throw jump finally-block)))
+              (new-return (lambda (v) (begin (interpret-block finally-block environment-global environment-instance environment-method return break continue throw) (return v))))
+              (new-break (lambda (env) (break (interpret-block finally-block environment-global environment-instance env return break continue throw))))
+              (new-continue (lambda (env) (continue (interpret-block finally-block environment-global environment-instance env return break continue throw))))
+              (new-throw (create-throw-catch-continuation (get-catch statement) environment-global environment-instance environment-method return break continue throw jump finally-block)))
          (interpret-block finally-block
-                          (interpret-block try-block environment new-return new-break new-continue new-throw)
+                          (interpret-block try-block environment-global environment-instance environment-method new-return new-break new-continue new-throw)
                           return break continue throw))))))
 
 ; helper methods so that I can reuse the interpret-block method on the try and finally blocks
@@ -198,19 +268,19 @@
 
 ; Evaluates all possible boolean and arithmetic expressions and function calls, including constants and variables.
 (define eval-expression
-  (lambda (expr environment throw)
+  (lambda (expr environment-global environment-instance environment-method throw)
     (cond
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((not (list? expr)) (lookup expr environment))
-      ((eq? (car expr) 'funcall) (eval-function expr environment throw))
-      (else (eval-operator expr environment throw)))))
+      ((not (list? expr)) (lookup expr environment-method))
+      ((eq? (car expr) 'funcall) (eval-function expr environment-global environment-instance environment-method throw))
+      (else (eval-operator expr environment-global environment-instance environment-method throw)))))
 
 (define eval-function
-  (lambda (expr environment throw)
-    (call/cc (lambda (return) (interpret-statement-list (body (closure expr environment))
-                         (bind-parameters (formalparams (closure expr environment)) (params expr) (push-frame (append (closure-state (closure expr environment)) environment)) environment throw)
+  (lambda (expr environment-global environment-instance environment-method throw)
+    (call/cc (lambda (return) (interpret-statement-list (body (closure expr environment-method))
+                         (bind-parameters (formalparams (closure expr environment-method)) (params expr) (push-frame (append (closure-state (closure expr environment-method)) environment-method)) environment-method throw)
                          return
                          (lambda (s) (myerror "break used outside of loop"))
                          (lambda (s) (myerror "no return statemnet"))
@@ -220,29 +290,29 @@
 ; pass the result to eval-binary-op2 to evaluate the right operand.  This forces the operands to be evaluated in the proper order in case you choose
 ; to add side effects to the interpreter
 (define eval-operator
-  (lambda (expr environment throw)
+  (lambda (expr environment-global environment-instance environment-method throw)
     (cond
-      ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment throw)))
-      ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment throw)))
-      (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment throw) environment throw)))))
+      ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment-global environment-instance environment-method throw)))
+      ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment-global environment-instance environment-method throw)))
+      (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment-global environment-instance environment-method throw) environment-global environment-instance environment-method throw)))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
 (define eval-binary-op2
-  (lambda (expr op1value environment throw)
+  (lambda (expr op1value environment-global environment-instance environment-method throw)
     (cond
-      ((eq? '+ (operator expr)) (+ op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '- (operator expr)) (- op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '* (operator expr)) (* op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '/ (operator expr)) (quotient op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '% (operator expr)) (remainder op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '== (operator expr)) (isequal op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment throw))))
-      ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment throw)))
-      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment throw)))
+      ((eq? '+ (operator expr)) (+ op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '- (operator expr)) (- op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '* (operator expr)) (* op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '/ (operator expr)) (quotient op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '% (operator expr)) (remainder op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '== (operator expr)) (isequal op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw))))
+      ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
+      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment-global environment-instance environment-method throw)))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 ; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
@@ -287,7 +357,14 @@
 (define get-try operand1)
 (define get-catch operand2)
 (define get-finally operand3)
-
+(define get-var-value operand2)
+(define get-function-body operand2)
+(define get-class-function-list operand1)
+(define class-function operator)
+(define class-function-params operand2)
+(define class-function-body operand3)
+(define get-main-body operand1)
+    
 (define bind-parameters
   (lambda (params args fstate state throw)
     (cond
