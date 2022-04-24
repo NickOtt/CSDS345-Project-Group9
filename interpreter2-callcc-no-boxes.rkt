@@ -114,7 +114,7 @@
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
-  (lambda (statement environment-global environment-local return break continue throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment-global environment-local return throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment-global environment-local throw))
@@ -134,36 +134,36 @@
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
-  (lambda (statement environment-global environment-local return throw)
-    (return (eval-expression (get-expr statement) environment-global environment-local throw))))
+  (lambda (statement environment-global environment-local compile-time-type instance-type return throw)
+    (return (eval-expression (get-expr statement) environment-global environment-local compile-time-type instance-type throw))))
 
 ; Adds a new variable binding to the environment.  There may be an assignment with the variable
 (define interpret-declare
-  (lambda (statement environment-global environment-local throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type throw)
     (if (exists-declare-value? statement)
-        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment-global environment-local throw) environment-local)
+        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment-global environment-local compile-time-type instance-type throw) environment-local)
         (insert (get-declare-var statement) 'novalue environment-local))))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
-  (lambda (statement environment-global environment-local throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment-global environment-local throw) environment-global environment-local)))
+  (lambda (statement environment-global environment-local compile-time-type instance-type throw)
+    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment-global environment-local compile-time-type instance-type throw) environment-global environment-local)))
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
-  (lambda (statement environment-global environment-local return break continue throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) environment-global environment-local throw) (interpret-statement (get-then statement) environment-global environment-local return break continue throw))
+      ((eval-expression (get-condition statement) environment-global environment-local compile-time-type instance-type throw) (interpret-statement (get-then statement) environment-global environment-local return break continue throw))
       ((exists-else? statement) (interpret-statement (get-else statement) environment-global environment-local return break continue throw))
       (else environment-local))))
 
 ; Interprets a while loop.  We must create break and continue continuations for this loop
 (define interpret-while
-  (lambda (statement environment-global environment-local return throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return throw)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (condition body environment-local)
-                        (if (eval-expression condition environment-global environment-local throw)
+                        (if (eval-expression condition environment-global environment-local compile-time-type instance-type throw)
                             (loop condition body (interpret-statement body environment-global environment-local return break (lambda (env) (break (loop condition body env))) throw))
                          environment-local))))
          (loop (get-condition statement) (get-body statement) environment-local))))))
@@ -181,8 +181,8 @@
 
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
-  (lambda (statement environment-global environment-local throw)
-    (throw (eval-expression (get-expr statement) environment-global environment-local throw) environment-local)))
+  (lambda (statement environment-global environment-local compile-time-type instance-type throw)
+    (throw (eval-expression (get-expr statement) environment-global environment-local compile-time-type instance-type throw) environment-local)))
 ;
 (define interpret-function
   (lambda (statement environment-global environment-local return break continue throw)
@@ -264,7 +264,7 @@
 
 ; Evaluates all possible boolean and arithmetic expressions and function calls, including constants and variables.
 (define eval-expression
-  (lambda (expr environment-global environment-local throw)
+  (lambda (expr environment-global environment-local compile-time-type instance-type throw)
     (cond
       ((number? expr) expr)
       ((eq? expr 'true) #t)
