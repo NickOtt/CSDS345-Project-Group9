@@ -289,7 +289,9 @@
 
 (define create-initial-values
   (lambda (expressions environment-global environment-local throw)
-    (let ([current-eval (eval-expression (car expressions) environment-global environment-local throw)]) (cons (create-initial-values (cdr expressions) environment-global (insert current-eval environment-local)) (current-eval))))) 
+    (if (null? expressions)
+        '()
+        (let ([current-eval (eval-expression (car expressions) environment-global environment-local throw)]) (cons (create-initial-values (cdr expressions) environment-global (insert current-eval environment-local)) (current-eval)))))) 
 
 
 (define initial-field-values-expressions
