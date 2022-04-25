@@ -130,8 +130,8 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment-global environment-local compile-time-type instance-type return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment-global environment-local compile-time-type instance-type throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment-global environment-local compile-time-type instance-type return break continue throw))
-      ((eq? 'function (statement-type statement)) (interpret-function statement environment-global environment-local return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment-global environment-local return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment-global environment-local instance-type return break continue throw))
+      ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment-global environment-local compile-time-type instance-type return break continue throw))
 ;      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
@@ -191,8 +191,8 @@
     (throw (eval-expression (get-expr statement) environment-global environment-local compile-time-type instance-type throw) environment-local)))
 ;
 (define interpret-function
-  (lambda (statement environment-global environment-local return break continue throw)
-    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment-local) environment-local)))
+  (lambda (statement environment-global environment-local instance-type return break continue throw)
+    (insert (operand1 statement) (make-closure (cons 'this (operand2 statement)) (cons instance-type (operand3 statement)) environment-local) environment-local instance-type)))
 
 (define interpret-funcall
   (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
@@ -217,8 +217,8 @@
 
 ; Makes the closure for a function
 (define make-closure
-  (lambda (formal-params body func-def-state)
-    (list formal-params body func-def-state)))
+  (lambda (formal-params body func-def-state instance-type)
+    (list formal-params body func-def-state instance-type)))
 
 ; Interpret a try-catch-finally block
 
@@ -282,8 +282,8 @@
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
       ((not (list? expr)) (lookup expr environment-local))
-      ((eq? (car expr) 'funcall) (eval-function expr environment-global environment-local compile-time-type instance-type throw))
-      ((eq? (car expr) 'new) (eval-new expr environment-global environment-local throw))
+      ((eq? (operator expr) 'funcall) (eval-function expr environment-global environment-local compile-time-type instance-type throw))
+      ((eq? (operator expr) 'new) (eval-new expr environment-global environment-local throw))
       (else (eval-operator expr environment-global environment-local throw)))))
 
 (define eval-function
@@ -296,6 +296,12 @@
                          (lambda (s) (myerror "break used outside of loop"))
                          (lambda (s) (myerror "no return statemnet"))
                          throw)))))
+
+(define get-dot-instance
+  (lambda (expr environment-global environment-local compile-time-type instance-type throw)
+    (cond
+      ((eq? (operator expr) 'new) ;return closure of instance
+      (else eval
 
 (define eval-new
   (lambda (expr environment-global environment-local throw)
