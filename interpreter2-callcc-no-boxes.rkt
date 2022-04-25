@@ -85,6 +85,8 @@
      (get-main-body (lookup-in-frame 'main (get-class-function-list (lookup (string->symbol class-name) environment-global))))
      environment-global
      environment-local
+     (string->symbol class-name)
+     (string->symbol class-name)
      return break continue throw)))
 
 (define super-fields caddr)
@@ -104,12 +106,14 @@
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
-  (lambda (statement-list environment-global environment-local return break continue throw)
+  (lambda (statement-list environment-global environment-local compile-time-type instance-type return break continue throw)
     (if (null? statement-list)
         environment-local
         (interpret-statement-list (cdr statement-list)
                                   environment-global
-                                  (interpret-statement (car statement-list) environment-global environment-local return break continue throw)
+                                  (interpret-statement (car statement-list) environment-global environment-local compile-time-type instance-type return break continue throw)
+                                  compile-time-type
+                                  instance-type
                                   return break continue throw))))
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
@@ -123,9 +127,9 @@
       ((eq? 'while (statement-type statement)) (interpret-while statement environment-global environment-local return throw))
       ((eq? 'continue (statement-type statement)) (continue environment-local))
       ((eq? 'break (statement-type statement)) (break environment-local))
-      ((eq? 'begin (statement-type statement)) (interpret-block statement environment-global environment-local return break continue throw))
-      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment-global environment-local throw))
-      ((eq? 'try (statement-type statement)) (interpret-try statement environment-global environment-local return break continue throw))
+      ((eq? 'begin (statement-type statement)) (interpret-block statement environment-global environment-local compile-time-type instance-type return break continue throw))
+      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment-global environment-local compile-time-type instance-type throw))
+      ((eq? 'try (statement-type statement)) (interpret-try statement environment-global environment-local compile-time-type instance-type return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment-global environment-local return break continue throw))
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment-global environment-local return break continue throw))
 ;      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
@@ -170,11 +174,13 @@
 
 ; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
 (define interpret-block
-  (lambda (statement environment-global environment-local return break continue throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (pop-frame (interpret-statement-list (cdr statement)
                                          environment-global
                                          (push-frame environment-local)
                                          return
+                                         compile-time-type
+                                         instance-type
                                          (lambda (env) (break (pop-frame env)))
                                          (lambda (env) (continue (pop-frame env)))
                                          (lambda (v env) (throw v (pop-frame env)))))))
@@ -186,12 +192,14 @@
 ;
 (define interpret-function
   (lambda (statement environment-global environment-local return break continue throw)
-    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment-global environment-local) environment-local)))
+    (insert (operand1 statement) (make-closure (operand2 statement) (operand3 statement) environment-local) environment-local)))
 
 (define interpret-funcall
-  (lambda (statement environment-global environment-local return break continue throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (interpret-statement-list (body (closure statement environment-global environment-local))
                               (bind-parameters (formalparams (closure statement environment-local)) (params statement) (push-frame (append (closure-state (closure statement environment-local)) environment-local)) environment-local throw)
+                              compile-time-type
+                              instance-type
                               return
                               (lambda (s) (myerror "break used outside of loop"))
                               (lambda (s) (myerror "no return statemnet"))
@@ -219,7 +227,7 @@
 (define create-throw-catch-continuation
   (lambda (catch-statement environment-global environment-local return break continue throw jump finally-block)
     (cond
-      ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block environment-global env return break continue throw)))) 
+      ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block environment-global env compile-time-type instance-type return break continue throw)))) 
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
       (else (lambda (ex env)
               (jump (interpret-block finally-block
@@ -228,6 +236,8 @@
                                                  (get-body catch-statement)
                                                  environment-global
                                                  (insert (catch-var catch-statement) ex (push-frame env))
+                                                 compile-time-type
+                                                 instance-type
                                                  return 
                                                  (lambda (env2) (break (pop-frame env2))) 
                                                  (lambda (env2) (continue (pop-frame env2))) 
@@ -237,17 +247,19 @@
 ; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
 (define interpret-try
-  (lambda (statement environment-global environment-local return break continue throw)
+  (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (call/cc
      (lambda (jump)
        (let* ((finally-block (make-finally-block (get-finally statement)))
               (try-block (make-try-block (get-try statement)))
-              (new-return (lambda (v) (begin (interpret-block finally-block environment-global environment-local return break continue throw) (return v))))
-              (new-break (lambda (env) (break (interpret-block finally-block environment-global env return break continue throw))))
-              (new-continue (lambda (env) (continue (interpret-block finally-block environment-global env return break continue throw))))
+              (new-return (lambda (v) (begin (interpret-block finally-block environment-global environment-local compile-time-type instance-type return break continue throw) (return v))))
+              (new-break (lambda (env) (break (interpret-block finally-block environment-global env compile-time-type instance-type return break continue throw))))
+              (new-continue (lambda (env) (continue (interpret-block finally-block environment-global env compile-time-type instance-type return break continue throw))))
               (new-throw (create-throw-catch-continuation (get-catch statement) environment-global environment-local return break continue throw jump finally-block)))
          (interpret-block finally-block
-                          (interpret-block try-block environment-global environment-local new-return new-break new-continue new-throw)
+                          (interpret-block try-block environment-global environment-local compile-time-type instance-type new-return new-break new-continue new-throw)
+                          compile-time-type
+                          instance-type
                           return break continue throw))))))
 
 ; helper methods so that I can reuse the interpret-block method on the try and finally blocks
@@ -270,7 +282,7 @@
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
       ((not (list? expr)) (lookup expr environment-local))
-      ((eq? (car expr) 'funcall) (eval-function expr environment-global environment-local throw))
+      ((eq? (car expr) 'funcall) (eval-function expr environment-global environment-local compile-time-type instance-type throw))
       ((eq? (car expr) 'new) (eval-new expr environment-global environment-local throw))
       (else (eval-operator expr environment-global environment-local throw)))))
 
@@ -278,6 +290,8 @@
   (lambda (expr environment-global environment-local throw)
     (call/cc (lambda (return) (interpret-statement-list (body (closure expr environment-global environment-local))
                          (bind-parameters (formalparams (closure expr environment-local)) (params expr) (push-frame (append (closure-state (closure expr environment-local)) environment-local)) environment-local throw)
+                         compile-time-type
+                         instance-type
                          return
                          (lambda (s) (myerror "break used outside of loop"))
                          (lambda (s) (myerror "no return statemnet"))
