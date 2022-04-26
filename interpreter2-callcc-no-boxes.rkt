@@ -42,15 +42,15 @@
       (else (create-global-environment (cdr statement-list)
                               (insert
                                (class-definition-name statement-list)
-                               (make-class-closure (class-extends-body statement-list) empty-class-closure environment-global)
+                               (make-class-closure (class-definition-name statement-list) (class-extends-body statement-list) empty-class-closure environment-global)
                                environment-global)
                               return break continue throw)))))
 
 (define make-class-closure
-  (lambda (class-definition closure environment-global)
+  (lambda (class-definition-name class-definition new-closure environment-global)
     (cond
-      ((null? class-definition) closure)
-      ((null? (car class-definition)) (make-class-closure (cadr class-definition) closure environment-global))
+      ((null? class-definition) new-closure)
+      ((null? (car class-definition)) (make-class-closure class-definition-name (cadr class-definition) new-closure environment-global ))
       ((eq? (class-definition-type class-definition) 'extends)
        (make-class-closure (cadr class-definition) (list
                                                    (cons (super-class-name class-definition) '())
@@ -58,17 +58,25 @@
                                                    (super-fields (lookup (super-class-name class-definition) environment-global)))) environment-global)
       ((or (eq? (class-definition-type class-definition) 'static-function)
            (eq? (class-definition-type class-definition) 'function))
-       (make-class-closure (cdr class-definition) (list
-                                                   (class-closure-super closure)
-                                                   (add-to-class-closure (class-function-name class-definition) (make-closure (class-function-params (class-function class-definition)) (class-function-body (class-function class-definition)) environment-global) (class-closure-functions closure))
-                                                   (class-closure-instances closure))
-                           environment-global))
+       (make-class-closure class-definition-name
+        (cdr class-definition)
+        (list
+         (class-closure-super new-closure)
+         (add-to-class-closure
+          (class-function-name class-definition)
+          (make-closure (class-function-params(class-function class-definition)) (class-function-body (class-function class-definition)) environment-global class-definition-name)
+          (class-closure-functions new-closure))
+         (class-closure-instances new-closure))
+        environment-global))
       ((eq? (class-definition-type class-definition) 'var)
-       (make-class-closure (cdr class-definition) (list
-                                                   (class-closure-super closure)
-                                                   (class-closure-functions closure)
-                                                   (add-to-class-closure (class-variable-name class-definition) (get-var-value (car class-definition)) (class-closure-instances closure)))
-                           environment-global))
+       (make-class-closure
+        class-definition-name
+        (cdr class-definition)
+        (list
+         (class-closure-super new-closure)
+         (class-closure-functions new-closure)
+         (add-to-class-closure (class-variable-name class-definition) (get-var-value (car class-definition)) (class-closure-instances new-closure)))
+        environment-global))
       (else myerror "invalid class body"))))
 
 ; Add a new variable/value or function/body pair to the class closure.
@@ -120,11 +128,11 @@
 (define interpret-statement
   (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (cond
-      ((eq? 'return (statement-type statement)) (interpret-return statement environment-global environment-local return throw))
-      ((eq? 'var (statement-type statement)) (interpret-declare statement environment-global environment-local throw))
-      ((eq? '= (statement-type statement)) (interpret-assign statement environment-global environment-local throw))
-      ((eq? 'if (statement-type statement)) (interpret-if statement environment-global environment-local return break continue throw))
-      ((eq? 'while (statement-type statement)) (interpret-while statement environment-global environment-local return throw))
+      ((eq? 'return (statement-type statement)) (interpret-return statement environment-global environment-local compile-time-type instance-type return throw))
+      ((eq? 'var (statement-type statement)) (interpret-declare statement environment-global environment-local compile-time-type instance-type throw))
+      ((eq? '= (statement-type statement)) (interpret-assign statement environment-global environment-local compile-time-type instance-type throw))
+      ((eq? 'if (statement-type statement)) (interpret-if statement environment-global environment-local compile-time-type instance-type return break continue throw))
+      ((eq? 'while (statement-type statement)) (interpret-while statement environment-global environment-local compile-time-type instance-type return throw))
       ((eq? 'continue (statement-type statement)) (continue environment-local))
       ((eq? 'break (statement-type statement)) (break environment-local))
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment-global environment-local compile-time-type instance-type return break continue throw))
@@ -192,12 +200,12 @@
 ;
 (define interpret-function
   (lambda (statement environment-global environment-local instance-type return break continue throw)
-    (insert (operand1 statement) (make-closure (cons 'this (operand2 statement)) (cons instance-type (operand3 statement)) environment-local) environment-local instance-type)))
+    (insert (operand1 statement) (make-closure (cons 'this (operand2 statement)) (operand3 statement) environment-local) environment-local)))
 
 (define interpret-funcall
   (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
-    (interpret-statement-list (body (closure statement environment-global environment-local))
-                              (bind-parameters (formalparams (closure statement environment-local)) (params statement) (push-frame (append (closure-state (closure statement environment-local)) environment-local)) environment-local throw)
+    (interpret-statement-list (body (closure (operand1 statement) environment-local))
+                              (bind-parameters (formalparams (closure (operand1 statement) environment-local)) (params statement) (push-frame (append (closure-state (closure (operand1 statement) environment-local)) environment-local)) environment-local throw)
                               compile-time-type
                               instance-type
                               return
@@ -225,7 +233,7 @@
 ; Create a continuation for the throw.  If there is no catch, it has to interpret the finally block, and once that completes throw the exception.
 ;   Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
 (define create-throw-catch-continuation
-  (lambda (catch-statement environment-global environment-local return break continue throw jump finally-block)
+  (lambda (catch-statement environment-global environment-local compile-time-type instance-type return break continue throw jump finally-block)
     (cond
       ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block environment-global env compile-time-type instance-type return break continue throw)))) 
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
@@ -284,25 +292,50 @@
       ((not (list? expr)) (lookup expr environment-local))
       ((eq? (operator expr) 'funcall) (eval-function expr environment-global environment-local compile-time-type instance-type throw))
       ((eq? (operator expr) 'new) (eval-new expr environment-global environment-local throw))
+      ((eq? (operator expr) 'dot) (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw))
       (else (eval-operator expr environment-global environment-local throw)))))
 
 (define eval-function
-  (lambda (expr environment-global environment-local throw)
-    (call/cc (lambda (return) (interpret-statement-list (body (closure expr environment-global environment-local))
-                         (bind-parameters (formalparams (closure expr environment-local)) (params expr) (push-frame (append (closure-state (closure expr environment-local)) environment-local)) environment-local throw)
-                         compile-time-type
-                         instance-type
-                         return
-                         (lambda (s) (myerror "break used outside of loop"))
-                         (lambda (s) (myerror "no return statemnet"))
-                         throw)))))
-
-(define get-dot-instance
   (lambda (expr environment-global environment-local compile-time-type instance-type throw)
-    (cond
-      ((eq? (operator expr) 'new) ;return closure of instance
-      (else eval
+    (if
+     (eq? (operator (operand1 expr)) 'dot)
+     (call/cc (lambda (return)
+                (let ([dot-instance-type (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw)])
+                  (interpret-statement-list (body (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance dot-instance-type)))
+                                          environment-global
+                                          (bind-parameters (formalparams (closure (operand2 (operand1 expr)) environment-local)) (cons dot-instance-type (params expr)) environment-local environment-local throw)
+                                          (instance-class-name dot-instance-type)
+                                          instance-type
+                                          return
+                                          (lambda (s) (myerror "break used outside of loop"))
+                                          (lambda (s) (myerror "no return statement"))
+                                          throw))))
+     (call/cc (lambda (return)
+                (interpret-statement-list
+                 (body (closure (operand1 expr) environment-local))
+                 environment-global
+                 (bind-parameters (formalparams (closure (operand1 expr) environment-local)) (params expr) (push-frame (append (closure-state (closure (operand1 expr) environment-local)) environment-local)) environment-local throw)
+                 compile-time-type
+                 instance-type
+                 return
+                 (lambda (s) (myerror "break used outside of loop"))
+                 (lambda (s) (myerror "no return statemnet"))
+                 throw))))))
 
+(define instance-class-name caar)
+(define get-functions-of-instance cadar)
+
+;(define get-dot-instance
+;  (lambda (expr environment-global environment-local compile-time-type instance-type throw)
+;    (cond
+;      ((eq? (operator expr) 'new)  );return closure of instance
+;      ((eq? (operator expr) 'funcall) (get-dot-instance (instance-of-next-dot expr)))
+;      (else eval
+
+;(define instance-of-next-dot cadadr)
+
+
+            
 (define eval-new
   (lambda (expr environment-global environment-local throw)
     (list (lookup (operand1 expr) environment-global) (create-initial-values (initial-field-values-expressions (lookup (operand1 expr) environment-global)) environment-global '((() ())) throw))))
@@ -421,7 +454,7 @@
 
 (define closure
   (lambda (expr environment)
-    (lookup (operand1 expr) environment)))
+    (lookup expr environment)))
 
 
 ;------------------------
