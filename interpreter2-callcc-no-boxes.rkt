@@ -58,8 +58,7 @@
                                                    (cons (super-class-name class-definition) '())
                                                    (super-methods (lookup (super-class-name class-definition) environment-global))
                                                    (super-fields (lookup (super-class-name class-definition) environment-global)))) environment-global)
-      ((or (eq? (class-definition-type class-definition) 'static-function)
-           (eq? (class-definition-type class-definition) 'function))
+      ((eq? (class-definition-type class-definition) 'static-function)
        (make-class-closure class-definition-name
         (cdr class-definition)
         (list
@@ -67,6 +66,17 @@
          (add-to-class-closure
           (class-function-name class-definition)
           (make-closure (class-function-params(class-function class-definition)) (class-function-body (class-function class-definition)) environment-global class-definition-name)
+          (class-closure-functions new-closure))
+         (class-closure-instances new-closure))
+        environment-global))
+      ((eq? (class-definition-type class-definition) 'function)
+       (make-class-closure class-definition-name
+        (cdr class-definition)
+        (list
+         (class-closure-super new-closure)
+         (add-to-class-closure
+          (class-function-name class-definition)
+          (make-closure (cons 'this (class-function-params(class-function class-definition))) (class-function-body (class-function class-definition)) environment-global class-definition-name)
           (class-closure-functions new-closure))
          (class-closure-instances new-closure))
         environment-global))
@@ -308,7 +318,7 @@
                 (let ([dot-instance-type (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw)])
                   (interpret-statement-list (body (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance dot-instance-type)))
                                           environment-global
-                                          (bind-parameters (formalparams (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance dot-instance-type))) (cons (operand1 (operand1 expr)) (params expr)) environment-local environment-global environment-local compile-time-type instance-type throw)
+                                          (bind-parameters (formalparams (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance (lookup (operand1 (operand1 expr)) environment-local)))) (cons (operand1 (operand1 expr)) (params expr)) environment-local environment-global environment-local compile-time-type instance-type throw)
                                           (instance-class-name dot-instance-type)
                                           instance-type
                                           return
