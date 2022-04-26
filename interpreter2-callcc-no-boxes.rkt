@@ -311,9 +311,6 @@
                  (lambda (s) (myerror "no return statemnet"))
                  throw))))))
 
-(define instance-class-name caar)
-(define get-functions-of-instance cadar)
-
 ; Return new instance closure for an instance        
 (define eval-new
   (lambda (expr environment-global environment-local throw)
@@ -410,6 +407,8 @@
 (define class-function-params operand2)
 (define class-function-body operand3)
 (define get-main-body operand1)
+(define instance-class-name caar)
+(define get-functions-of-instance cadar)
     
 (define bind-parameters
   (lambda (params args fstate environment-global environment-local compile-time-type instance-type throw)
