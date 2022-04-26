@@ -35,6 +35,7 @@
                         (lambda (env) (myerror "Continue used outside of loop"))
                         (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
+; Create the global environment with class closures by doing a pass through the whole statement list
 (define create-global-environment
   (lambda (statement-list environment-global return break continue throw)
     (cond
@@ -46,6 +47,7 @@
                                environment-global)
                               return break continue throw)))))
 
+; Make the class closure in the structure: ((super class), ((function names), (function closures)), ((field names), (field init values)))
 (define make-class-closure
   (lambda (class-definition-name class-definition new-closure environment-global)
     (cond
@@ -197,11 +199,13 @@
 (define interpret-throw
   (lambda (statement environment-global environment-local compile-time-type instance-type throw)
     (throw (eval-expression (get-expr statement) environment-global environment-local compile-time-type instance-type throw) environment-local)))
-;
+
+; Add the function closure to the environment
 (define interpret-function
   (lambda (statement environment-global environment-local instance-type return break continue throw)
     (insert (operand1 statement) (make-closure (cons 'this (operand2 statement)) (operand3 statement) environment-local) environment-local)))
 
+; Handle functions calls to functions that belong to classes
 (define interpret-funcall
   (lambda (statement environment-global environment-local compile-time-type instance-type return break continue throw)
     (interpret-statement-list (body (closure (operand1 statement) environment-local))
@@ -293,8 +297,9 @@
       ((eq? (operator expr) 'funcall) (eval-function expr environment-global environment-local compile-time-type instance-type throw))
       ((eq? (operator expr) 'new) (eval-new expr environment-global environment-local throw))
       ((eq? (operator expr) 'dot) (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw))
-      (else (eval-operator expr environment-global environment-local throw)))))
+      (else (eval-operator expr environment-global environment-local compile-time-type instance-type throw)))))
 
+; Evaluate the result of calling a function
 (define eval-function
   (lambda (expr environment-global environment-local compile-time-type instance-type throw)
     (if
@@ -303,7 +308,7 @@
                 (let ([dot-instance-type (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw)])
                   (interpret-statement-list (body (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance dot-instance-type)))
                                           environment-global
-                                          (bind-parameters (formalparams (closure (operand2 (operand1 expr)) environment-local)) (cons dot-instance-type (params expr)) environment-local environment-local throw)
+                                          (bind-parameters (formalparams (lookup-in-frame (operand2 (operand1 expr)) (get-functions-of-instance dot-instance-type))) (cons (operand1 (operand1 expr)) (params expr)) environment-local environment-global environment-local compile-time-type instance-type throw)
                                           (instance-class-name dot-instance-type)
                                           instance-type
                                           return
@@ -335,18 +340,19 @@
 ;(define instance-of-next-dot cadadr)
 
 
-            
+; Return new instance closure for an instance        
 (define eval-new
   (lambda (expr environment-global environment-local throw)
     (list (lookup (operand1 expr) environment-global) (create-initial-values (initial-field-values-expressions (lookup (operand1 expr) environment-global)) environment-global '((() ())) throw))))
 
+; Evaluates the initial values for the instance closure from the intial value expressions in the class closure
 (define create-initial-values
   (lambda (expressions environment-global environment-local throw)
     (if (null? expressions)
         '()
         (let ([current-eval (eval-expression (car expressions) environment-global environment-local throw)]) (cons (create-initial-values (cdr expressions) environment-global (insert current-eval environment-local)) (current-eval)))))) 
 
-
+; Gets the initial value expressions from the class closure
 (define initial-field-values-expressions
   (lambda (lis)
     (cadr (caddr lis))))
@@ -356,29 +362,29 @@
 ; pass the result to eval-binary-op2 to evaluate the right operand.  This forces the operands to be evaluated in the proper order in case you choose
 ; to add side effects to the interpreter
 (define eval-operator
-  (lambda (expr environment-global environment-local throw)
+  (lambda (expr environment-global environment-local compile-time-type instance-type throw)
     (cond
-      ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment-global environment-local throw)))
-      ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment-global environment-local throw)))
-      (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment-global environment-local throw) environment-global environment-local throw)))))
+      ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw)))
+      (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment-global environment-local compile-time-type instance-type throw) environment-global environment-local compile-time-type instance-type throw)))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
 (define eval-binary-op2
-  (lambda (expr op1value environment-global environment-local throw)
+  (lambda (expr op1value environment-global environment-local compile-time-type instance-type throw)
     (cond
-      ((eq? '+ (operator expr)) (+ op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '- (operator expr)) (- op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '* (operator expr)) (* op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '/ (operator expr)) (quotient op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '% (operator expr)) (remainder op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '== (operator expr)) (isequal op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment-global environment-local throw))))
-      ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
-      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment-global environment-local throw)))
+      ((eq? '+ (operator expr)) (+ op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '- (operator expr)) (- op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '* (operator expr)) (* op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '/ (operator expr)) (quotient op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '% (operator expr)) (remainder op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '== (operator expr)) (isequal op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw))))
+      ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
+      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment-global environment-local compile-time-type instance-type throw)))
       (else (myerror "Unknown operator:" (operator expr))))))
 
 ; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
@@ -432,11 +438,11 @@
 (define get-main-body operand1)
     
 (define bind-parameters
-  (lambda (params args fstate state throw)
+  (lambda (params args fstate environment-global environment-local compile-time-type instance-type throw)
     (cond
       ((null? params) (if (null? args) fstate (throw (myerror "incorrect # of args"))))
       ((null? args) (throw (myerror "incorrect # of args")))
-      (else (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) state throw) fstate) state throw)))))
+      (else (bind-parameters (cdr params) (cdr args) (insert (car params) (eval-expression (car args) environment-global environment-local compile-time-type instance-type throw) fstate) environment-global environment-local compile-time-type instance-type throw)))))
 
 
 
