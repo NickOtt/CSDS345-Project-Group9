@@ -98,7 +98,7 @@
         (myerror "error: variable is being re-declared:" var)
         (list (cons var (variables class-closure)) (cons (box (scheme->language val)) (store class-closure))))))
 
-;(((A) (#&(() ((main) (#&(() ((var a (new A)) (return (+ (dot a x) (dot a y)))) ((() ()))))) ((y x) (#&10 #&5))))))
+; interpret the main method
 (define interpret-main
   (lambda (class-name environment-global environment-local return break continue throw)
     (interpret-statement-list
@@ -108,21 +108,6 @@
      (string->symbol class-name)
      (string->symbol class-name)
      return break continue throw)))
-
-(define super-fields caddr)
-(define super-methods cadr)
-(define class-definition-type caar)
-(define empty-class-closure '(() (() ()) (() ())))
-(define class-closure-super car)
-(define class-closure-functions cadr)
-(define class-closure-instances caddr)
-(define class-extends-body cddar)
-(define class-variable-name cadar)
-(define class-function-name cadar)
-(define class-definition-name cadar)
-(define super-class-name cadar)
-(define function-type cadar)
-(define main-body cdddar)
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -152,7 +137,6 @@
       ((eq? 'try (statement-type statement)) (interpret-try statement environment-global environment-local compile-time-type instance-type return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment-global environment-local instance-type return break continue throw))
       ((eq? 'funcall (statement-type statement)) (interpret-funcall statement environment-global environment-local compile-time-type instance-type return break continue throw))
-;      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 
@@ -226,16 +210,6 @@
                               (lambda (s) (myerror "break used outside of loop"))
                               (lambda (s) (myerror "no return statemnet"))
                               throw)))
-
-; Interpret file with main() method and functions
-
-;Run through global variables and function and add to state before calling main()
-;(define create-base-layer
-;  (lambda (statement-list environment return break continue throw)
-;    (cond
-;      ((null? statement-list) environment)
-;      ((eq? 'main (operand1 (car statement-list))) (create-base-layer (cdr statement-list) environment return break continue throw))
-;      (else (create-base-layer (cdr statement-list) (interpret-statement (car statement-list) environment return break continue throw) return break continue throw)))))
 
 ; Makes the closure for a function
 (define make-closure
@@ -339,16 +313,6 @@
 
 (define instance-class-name caar)
 (define get-functions-of-instance cadar)
-
-;(define get-dot-instance
-;  (lambda (expr environment-global environment-local compile-time-type instance-type throw)
-;    (cond
-;      ((eq? (operator expr) 'new)  );return closure of instance
-;      ((eq? (operator expr) 'funcall) (get-dot-instance (instance-of-next-dot expr)))
-;      (else eval
-
-;(define instance-of-next-dot cadadr)
-
 
 ; Return new instance closure for an instance        
 (define eval-new
@@ -463,6 +427,20 @@
 (define body cadr)
 (define params cddr)
 (define closure-state caddr)
+(define super-fields caddr)
+(define super-methods cadr)
+(define class-definition-type caar)
+(define empty-class-closure '(() (() ()) (() ())))
+(define class-closure-super car)
+(define class-closure-functions cadr)
+(define class-closure-instances caddr)
+(define class-extends-body cddar)
+(define class-variable-name cadar)
+(define class-function-name cadar)
+(define class-definition-name cadar)
+(define super-class-name cadar)
+(define function-type cadar)
+(define main-body cdddar)
 
 (define catch-var
   (lambda (catch-statement)
